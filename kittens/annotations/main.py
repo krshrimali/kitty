@@ -316,12 +316,28 @@ class ListHandler(Handler):
         self.message = ''
         self.copy_ids: list[str] = []
         self.result: dict[str, Any] = {}
+        self.query = ''
+        self.searching = False
+        self.show_help = False
+        self.focus = 'list'
+        self.detail_offset = 0
 
     # helpers {{{
     @property
+    def displayed(self) -> list[dict[str, Any]]:
+        if not self.query:
+            return self.annotations
+        q = self.query.casefold()
+        return [
+            a for a in self.annotations
+            if q in '\n'.join((a.get('text', ''), self.note_for(a), location_text(a.get('location') or {}))).casefold()
+        ]
+
+    @property
     def current(self) -> dict[str, Any] | None:
-        if 0 <= self.idx < len(self.annotations):
-            return self.annotations[self.idx]
+        shown = self.displayed
+        if 0 <= self.idx < len(shown):
+            return shown[self.idx]
         return None
 
     def note_for(self, a: dict[str, Any]) -> str:
@@ -363,8 +379,9 @@ class ListHandler(Handler):
 
     def visible_annotations(self, count: int) -> tuple[int, list[dict[str, Any]]]:
         count = max(1, count)
-        start = max(0, min(self.idx - count // 2, len(self.annotations) - count))
-        return start, self.annotations[start : start + count]
+        shown = self.displayed
+        start = max(0, min(self.idx - count // 2, len(shown) - count))
+        return start, shown[start : start + count]
 
     def list_entry(self, i: int, a: dict[str, Any], width: int) -> tuple[str, int]:
         is_current = i == self.idx
@@ -391,6 +408,8 @@ class ListHandler(Handler):
             for line in wrap_text(self.note_for(cur) or '(no note)', right_width):
                 detail.append((line, wcswidth(line)))
         available = max(3, rows - 7)
+        if self.focus == 'detail':
+            detail = detail[self.detail_offset :]
         start, shown = self.visible_annotations(available // 2)
         list_rows: list[tuple[str, int]] = []
         for i, a in enumerate(shown, start):
@@ -414,14 +433,19 @@ class ListHandler(Handler):
         self.cmd.clear_screen()
         sz = self.screen_size
         f = Frame(sz.cols)
-        position = f'{self.idx + 1}/{len(self.annotations)}' if self.annotations else '0/0'
+        shown = self.displayed
+        position = f'{self.idx + 1}/{len(shown)}' if shown else '0/0'
         tag = f'{len(self.ticked)} ticked · {position}' if self.ticked else position
         lines = ['', f.top(self.panel_title, tag)]
         context = f'{self.scope.capitalize()} · {self.fmt.capitalize()}'
+        if self.query:
+            context += f' · Filter: {self.query}'
         lines.append(f.text(dim(truncate_to_width(context, f.width))))
         lines.append('')
-        if not self.annotations:
-            for msg in ('', 'No annotations yet.', 'Select some text and press the annotate shortcut.', ''):
+        if not shown:
+            empty = 'No matching annotations.' if self.query else 'No annotations yet.'
+            hint = 'Press / to change the search.' if self.query else 'Select some text and press the annotate shortcut.'
+            for msg in ('', empty, hint, ''):
                 lines.append(f.row(dim(msg), wcswidth(msg)))
         elif f.width >= 90:
             self.draw_wide_panel(f, sz.rows, lines)
@@ -452,7 +476,17 @@ class ListHandler(Handler):
             for line in wrap_text(self.note_for(cur) or '(no note)', f.width - 4)[:3]:
                 lines.append(f.indented(line))
         lines.append('')
-        footer = self.message or 'space tick · a all · e edit · d delete · y copy · Y copy current · q quit'
+        if self.show_help:
+            help_lines = (
+                'Navigation: j/k move · g/G first/last · Tab list/preview',
+                'Find: / search · Esc clear search',
+                'Selection: Space tick · a toggle all',
+                'Actions: e edit · d delete · y copy · Y copy current · q quit',
+                'Press ? to close help',
+            )
+            lines = lines[: max(0, sz.rows - len(help_lines) - 2)]
+            lines.extend(('', f.rule('Keyboard help'), *(f.text(x) for x in help_lines)))
+        footer = self.message or ('search> ' + self.query if self.searching else '/ search · ? help · space tick · e edit · d delete · y copy · q quit')
         lines.append(f.text(styled(truncate_to_width(footer, f.width), fg='yellow') if self.message else dim(truncate_to_width(footer, f.width))))
         self.write('\r\n'.join(lines[: sz.rows]))
 
@@ -474,17 +508,54 @@ class ListHandler(Handler):
 
     def on_key(self, key_event: KeyEvent) -> None:
         self.message = ''
+        if self.show_help:
+            if key_event.matches('?') or key_event.matches('esc') or key_event.matches('q'):
+                self.show_help = False
+                self.draw_screen()
+            return
+        if self.searching:
+            if key_event.matches('esc'):
+                self.searching = False
+                self.query = ''
+            elif key_event.matches('enter'):
+                self.searching = False
+            elif key_event.matches('backspace'):
+                self.query = self.query[:-1]
+            elif key_event.text and key_event.text.isprintable():
+                self.query += key_event.text
+            self.idx = 0
+            self.detail_offset = 0
+            self.draw_screen()
+            return
         if key_event.matches('q') or key_event.matches('esc'):
+            if self.query:
+                self.query = ''
+                self.idx = 0
+                self.draw_screen()
+                return
             self.finish()
             return
-        if key_event.matches('j') or key_event.matches('down') or key_event.matches('ctrl+n'):
-            self.idx = min(self.idx + 1, max(0, len(self.annotations) - 1))
+        if key_event.matches('?'):
+            self.show_help = True
+        elif key_event.matches('/'):
+            self.searching = True
+        elif key_event.matches('tab'):
+            self.focus = 'detail' if self.focus == 'list' else 'list'
+            self.message = f'{self.focus.capitalize()} focused'
+        elif (key_event.matches('j') or key_event.matches('down') or key_event.matches('ctrl+n')) and self.focus == 'detail':
+            self.detail_offset += 1
+        elif (key_event.matches('k') or key_event.matches('up') or key_event.matches('ctrl+p')) and self.focus == 'detail':
+            self.detail_offset = max(0, self.detail_offset - 1)
+        elif key_event.matches('j') or key_event.matches('down') or key_event.matches('ctrl+n'):
+            self.idx = min(self.idx + 1, max(0, len(self.displayed) - 1))
+            self.detail_offset = 0
         elif key_event.matches('k') or key_event.matches('up') or key_event.matches('ctrl+p'):
             self.idx = max(0, self.idx - 1)
+            self.detail_offset = 0
         elif key_event.matches('g') or key_event.matches('home'):
             self.idx = 0
         elif key_event.matches('shift+g') or key_event.matches('end'):
-            self.idx = max(0, len(self.annotations) - 1)
+            self.idx = max(0, len(self.displayed) - 1)
         elif key_event.matches('space'):
             cur = self.current
             if cur is not None:
@@ -501,8 +572,8 @@ class ListHandler(Handler):
                 self.deleted.append(cur['id'])
                 self.ticked.discard(cur['id'])
                 self.edited.pop(cur['id'], None)
-                del self.annotations[self.idx]
-                self.idx = min(self.idx, max(0, len(self.annotations) - 1))
+                self.annotations.remove(cur)
+                self.idx = min(self.idx, max(0, len(self.displayed) - 1))
                 self.message = 'Annotation deleted'
         elif key_event.matches('e') or key_event.matches('enter'):
             cur = self.current
