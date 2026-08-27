@@ -2,9 +2,12 @@
 # License: GPL v3 Copyright: 2026, Kovid Goyal <kovid at kovidgoyal.net>
 
 from functools import partial
+from unittest.mock import patch
 
+from kittens.annotations.main import Frame, ListHandler, key_event_for_char, truncate_to_width, visible_window, wrap_text
 from kitty.annotations import Annotation, AnnotationStore, Location, format_annotations
 from kitty.fast_data_types import GLFW_MOUSE_BUTTON_LEFT, create_mock_window, mock_mouse_selection, send_mock_mouse_event_to_window
+from kitty.key_encoding import KeyEvent, parse_shortcut
 from kitty.window import cell_is_in_selection
 
 from .base import BaseTest
@@ -17,6 +20,45 @@ def send_mouse_event(window, button=-1, modifiers=0, is_release=False, x=0.0, y=
 
 
 class TestAnnotations(BaseTest):
+    def test_annotation_tui_layout_helpers(self):
+        self.ae(Frame(40).margin, 0)
+        self.ae(Frame(200).width, 120)
+        self.ae(visible_window(100, 50, 9), (46, 55))
+        self.ae(visible_window(3, 2, 20), (0, 3))
+        self.ae(truncate_to_width('annotation🙂text', 8), 'annotat…')
+        self.assertTrue(all(len(line) > 0 for line in wrap_text('one two three four', 7)))
+
+    def test_annotation_tui_search_delete_and_editor_failure(self):
+        anns = [
+            {'id': 'a', 'text': 'compiler output', 'note': 'fix warning', 'location': {}, 'source_available': True},
+            {'id': 'b', 'text': 'test output', 'note': 'looks good', 'location': {}, 'source_available': False},
+        ]
+        h = ListHandler({'annotations': anns})
+        h.draw_screen = lambda: None
+        h.on_key(key_event_for_char('/'))
+        for ch in 'warning':
+            h.on_key(key_event_for_char(ch))
+        self.ae([a['id'] for a in h.displayed], ['a'])
+        h.on_key(KeyEvent(key=parse_shortcut('esc')[1]))
+        self.ae(len(h.displayed), 2)
+
+        h.on_key(key_event_for_char('d'))
+        self.ae([a['id'] for a in h.annotations], ['b'])
+        h.on_key(key_event_for_char('u'))
+        self.ae([a['id'] for a in h.annotations], ['a', 'b'])
+
+        with patch('kittens.annotations.main.edit_note_in_editor', return_value=None):
+            h.on_key(key_event_for_char('e'))
+        self.ae(h.message, 'Could not run your editor')
+
+        h.ticked.add('a')
+        h.query = 'output'
+        resized = object()
+        h.on_resize(resized)
+        self.assertIs(h.screen_size, resized)
+        self.ae(h.ticked, {'a'})
+        self.ae(h.query, 'output')
+
     def test_selection_bounds(self):
         s = self.create_screen()
         w = create_mock_window(s)

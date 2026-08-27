@@ -77,6 +77,13 @@ def wrap_text(text: str, width: int) -> list[str]:
     return ans
 
 
+def visible_window(total: int, current: int, count: int) -> tuple[int, int]:
+    'Return the start and end indexes for a viewport centered on the current item.'
+    count = max(1, count)
+    start = max(0, min(current - count // 2, total - count))
+    return start, min(total, start + count)
+
+
 class Frame:
     'A rounded box that floats with some space around it, rather than filling the window'
 
@@ -191,6 +198,10 @@ class AddHandler(Handler):
         self.result: dict[str, Any] | None = None
 
     def initialize(self) -> None:
+        self.draw_screen()
+
+    def on_resize(self, new_size: Any) -> None:
+        super().on_resize(new_size)
         self.draw_screen()
 
     @Handler.atomic_update
@@ -380,10 +391,13 @@ class ListHandler(Handler):
         self.draw_screen()
 
     def visible_annotations(self, count: int) -> tuple[int, list[dict[str, Any]]]:
-        count = max(1, count)
         shown = self.displayed
-        start = max(0, min(self.idx - count // 2, len(shown) - count))
-        return start, shown[start : start + count]
+        start, end = visible_window(len(shown), self.idx, count)
+        return start, shown[start:end]
+
+    def on_resize(self, new_size: Any) -> None:
+        super().on_resize(new_size)
+        self.draw_screen()
 
     def list_entry(self, i: int, a: dict[str, Any], width: int) -> tuple[str, int]:
         is_current = i == self.idx
