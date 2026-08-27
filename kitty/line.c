@@ -1078,7 +1078,7 @@ apply_mark(Line *line, const uint16_t mark, index_type *cell_pos, unsigned int *
 }
 
 static void
-apply_marker(PyObject *marker, Line *line, const PyObject *text) {
+apply_marker(PyObject *marker, Line *line, const PyObject *text, bool clear_unmatched) {
     unsigned int l = 0, r = 0, col = 0, match_pos = 0;
     PyObject *pl = PyLong_FromVoidPtr(&l), *pr = PyLong_FromVoidPtr(&r), *pcol = PyLong_FromVoidPtr(&col);
     if (!pl || !pr || !pcol) {
@@ -1098,12 +1098,12 @@ apply_marker(PyObject *marker, Line *line, const PyObject *text) {
     index_type x = 0;
     while ((match = PyIter_Next(iter)) && x < line->xnum) {
         Py_DECREF(match);
-        while (match_pos < l && x < line->xnum) { apply_mark(line, 0, &x, &match_pos); }
+        while (match_pos < l && x < line->xnum) { apply_mark(line, clear_unmatched ? 0 : line->gpu_cells[x].attrs.mark, &x, &match_pos); }
         uint16_t am = (col & MARK_MASK);
         while (x < line->xnum && match_pos <= r) { apply_mark(line, am, &x, &match_pos); }
     }
     Py_DECREF(iter);
-    while (x < line->xnum) line->gpu_cells[x++].attrs.mark = 0;
+    if (clear_unmatched) while (x < line->xnum) line->gpu_cells[x++].attrs.mark = 0;
     if (PyErr_Occurred()) report_marker_error(marker);
 }
 
@@ -1115,10 +1115,18 @@ mark_text_in_line(PyObject *marker, Line *line, ANSIBuf *buf) {
     }
     PyObject *text = line_as_unicode(line, false, buf);
     if (PyUnicode_GET_LENGTH(text) > 0) {
-        apply_marker(marker, line, text);
+        apply_marker(marker, line, text, true);
     } else {
         for (index_type i = 0; i < line->xnum; i++) line->gpu_cells[i].attrs.mark = 0;
     }
+    Py_DECREF(text);
+}
+
+void
+add_marks_to_line(PyObject *marker, Line *line, ANSIBuf *buf) {
+    if (!marker) return;
+    PyObject *text = line_as_unicode(line, false, buf);
+    if (PyUnicode_GET_LENGTH(text) > 0) apply_marker(marker, line, text, false);
     Py_DECREF(text);
 }
 

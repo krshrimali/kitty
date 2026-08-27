@@ -68,6 +68,15 @@ an empty diamond means the stored text remains available but the source window
 has closed. Pressing :kbd:`Enter` on a live source focuses its window and
 scrolls to the annotated line.
 
+The panel also supports the mouse. Use the wheel to move through annotations,
+click an entry to make it current, and click the current entry again to tick or
+untick it.
+
+Annotated text remains highlighted in its source window, including in
+scrollback, for as long as the annotation exists. Annotation highlights use a
+separate marker layer, so they do not replace markers configured with
+:ac:`toggle_marker`.
+
 
 What gets copied
 -------------------

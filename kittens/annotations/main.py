@@ -10,11 +10,11 @@ from typing import Any
 
 from kitty.fast_data_types import truncate_point_for_length, wcswidth
 from kitty.key_encoding import SHIFT, EventType, KeyEvent
-from kitty.typing_compat import BossType, MouseButton, MouseEvent
+from kitty.typing_compat import BossType
 
 from ..tui.handler import Handler, result_handler
 from ..tui.line_edit import LineEdit
-from ..tui.loop import Loop
+from ..tui.loop import Loop, MouseButton, MouseEvent
 from ..tui.operations import MouseTracking, styled, write_to_clipboard
 
 # Drawing helpers {{{
@@ -714,7 +714,7 @@ def main(args: list[str]) -> dict[str, Any] | None:
 
 @result_handler()
 def handle_result(args: list[str], data: dict[str, Any] | None, target_window_id: int, boss: BossType) -> None:
-    from kitty.annotations import Annotation, Location, annotation_store, format_annotations
+    from kitty.annotations import Annotation, Location, annotation_store, format_annotations, refresh_annotation_markers
     from kitty.clipboard import set_clipboard_string
 
     if not data:
@@ -727,6 +727,7 @@ def handle_result(args: list[str], data: dict[str, Any] | None, target_window_id
             a = store.get(existing_id)
             if a is not None:
                 a.note = data['note']
+                refresh_annotation_markers(boss)
             return
         store.add(
             Annotation(
@@ -735,6 +736,7 @@ def handle_result(args: list[str], data: dict[str, Any] | None, target_window_id
                 location=Location(**{k: v for k, v in loc.items() if k in Location._fields}),
             )
         )
+        refresh_annotation_markers(boss)
         return
     # list mode
     for annotation_id, note in (data.get('edited') or {}).items():
@@ -749,6 +751,7 @@ def handle_result(args: list[str], data: dict[str, Any] | None, target_window_id
         if text:
             set_clipboard_string(text)
     store.remove(data.get('deleted') or ())
+    refresh_annotation_markers(boss)
     if jump_id := data.get('jump'):
         a = store.get(jump_id)
         if a is not None and (window := boss.window_id_map.get(a.location.window_id)) is not None:

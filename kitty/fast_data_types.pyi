@@ -1196,6 +1196,9 @@ class Screen:
     def set_marker(self, marker: Optional[MarkerFunc] = None) -> None:
         pass
 
+    def set_annotation_marker(self, marker: Optional[MarkerFunc] = None) -> None:
+        pass
+
     def paste_bytes(self, data: bytes) -> None:
         pass
     paste = paste_bytes

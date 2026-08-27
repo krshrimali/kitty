@@ -2618,10 +2618,11 @@ class Boss:
     # annotations {{{
     def create_annotation(self, window: Window, text: str, location: 'Location', note: str = '') -> None:
         'Attach a note to a piece of text, prompting the user for the note if it is not specified'
-        from .annotations import Annotation, annotation_store
+        from .annotations import Annotation, annotation_store, refresh_annotation_markers
 
         if note:
             annotation_store().add(Annotation(text=text, note=note, location=location))
+            refresh_annotation_markers(self)
             return
         data = json.dumps({'mode': 'add', 'text': text, 'location': location._asdict(), 'note': ''})
         self.run_kitten_with_metadata('annotations', ['--mode=add'], input_data=data, window=window)
@@ -2722,9 +2723,10 @@ class Boss:
 
     def handle_clear_annotations_confirmation(self, confirmed: bool, annotation_ids: tuple[str, ...]) -> None:
         if confirmed:
-            from .annotations import annotation_store
+            from .annotations import annotation_store, refresh_annotation_markers
 
             annotation_store().remove(annotation_ids)
+            refresh_annotation_markers(self)
 
     # }}}
 

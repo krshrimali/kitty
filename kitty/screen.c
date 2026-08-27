@@ -784,6 +784,7 @@ dealloc(Screen *self) {
     Py_CLEAR(self->historybuf);
     Py_CLEAR(self->color_profile);
     Py_CLEAR(self->marker);
+    Py_CLEAR(self->annotation_marker);
     PyMem_Free(self->overlay_line.cpu_cells);
     PyMem_Free(self->overlay_line.gpu_cells);
     PyMem_Free(self->overlay_line.original_line.cpu_cells);
@@ -3937,6 +3938,17 @@ screen_has_marker(Screen *self) {
     return self->marker != NULL;
 }
 
+static bool
+screen_has_any_marker(Screen *self) {
+    return self->marker != NULL || self->annotation_marker != NULL;
+}
+
+static void
+apply_screen_markers(Screen *self, Line *line) {
+    mark_text_in_line(self->marker, line, &self->as_ansi_buf);
+    add_marks_to_line(self->annotation_marker, line, &self->as_ansi_buf);
+}
+
 static uint32_t
 diacritic_to_rowcolumn(char_type c) {
     return diacritic_to_num(c);
@@ -4068,7 +4080,7 @@ screen_update_cell_data(Screen *self, void *address, FONTS_DATA_HANDLE fonts_dat
                 if (linebuf->line->attrs.has_dirty_text) {
                     render_line(fonts_data, linebuf->line, y, &self->paused_rendering.cursor, self->disable_ligatures, self->lc);
                     screen_render_line_graphics(self, linebuf->line, y);
-                    if (linebuf->line->attrs.has_dirty_text && screen_has_marker(self)) mark_text_in_line(self->marker, linebuf->line, &self->as_ansi_buf);
+                    if (linebuf->line->attrs.has_dirty_text && screen_has_any_marker(self)) apply_screen_markers(self, linebuf->line);
                     linebuf_mark_line_clean(linebuf, y);
                 }
                 update_line_data(linebuf->line, y, address);
@@ -4101,14 +4113,14 @@ screen_update_cell_data(Screen *self, void *address, FONTS_DATA_HANDLE fonts_dat
             screen_render_line_graphics(self, linep, virtual_y - (int)self->scrolled_by);
             if (force_history_render || linep->attrs.has_dirty_text) {
                 render_line(fonts_data, linep, lnum, self->cursor, self->disable_ligatures, self->lc);
-                if (screen_has_marker(self)) mark_text_in_line(self->marker, linep, &self->as_ansi_buf);
+                if (screen_has_any_marker(self)) apply_screen_markers(self, linep);
                 historybuf_mark_line_clean(self->historybuf, lnum);
             }
         } else {
             if (linep->attrs.has_dirty_text || (cursor_has_moved && (self->cursor->y == lnum || self->last_rendered.cursor.y == lnum))) {
                 render_line(fonts_data, linep, lnum, self->cursor, self->disable_ligatures, self->lc);
                 screen_render_line_graphics(self, linep, virtual_y - (int)self->scrolled_by);
-                if (linep->attrs.has_dirty_text && screen_has_marker(self)) mark_text_in_line(self->marker, linep, &self->as_ansi_buf);
+                if (linep->attrs.has_dirty_text && screen_has_any_marker(self)) apply_screen_markers(self, linep);
                 if (is_overlay_active && lnum == self->overlay_line.ynum) render_overlay_line(self, linep, fonts_data);
                 linebuf_mark_line_clean(self->linebuf, lnum);
             }
@@ -6523,15 +6535,15 @@ static void
 screen_mark_all(Screen *self) {
     for (index_type y = 0; y < self->main_linebuf->ynum; y++) {
         linebuf_init_line(self->main_linebuf, y);
-        mark_text_in_line(self->marker, self->main_linebuf->line, &self->as_ansi_buf);
+        apply_screen_markers(self, self->main_linebuf->line);
     }
     for (index_type y = 0; y < self->alt_linebuf->ynum; y++) {
         linebuf_init_line(self->alt_linebuf, y);
-        mark_text_in_line(self->marker, self->alt_linebuf->line, &self->as_ansi_buf);
+        apply_screen_markers(self, self->alt_linebuf->line);
     }
     for (index_type y = 0; y < self->historybuf->count; y++) {
         historybuf_init_line(self->historybuf, y, self->historybuf->line);
-        mark_text_in_line(self->marker, self->historybuf->line, &self->as_ansi_buf);
+        apply_screen_markers(self, self->historybuf->line);
     }
     self->is_dirty = true;
 }
@@ -6553,6 +6565,19 @@ set_marker(Screen *self, PyObject *args) {
     }
     self->marker = marker;
     Py_INCREF(marker);
+    screen_mark_all(self);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+set_annotation_marker(Screen *self, PyObject *args) {
+    PyObject *marker = NULL;
+    if (!PyArg_ParseTuple(args, "|O", &marker)) return NULL;
+    if (marker && !PyCallable_Check(marker)) {
+        PyErr_SetString(PyExc_TypeError, "annotation marker must be a callable");
+        return NULL;
+    }
+    Py_XSETREF(self->annotation_marker, Py_XNewRef(marker));
     screen_mark_all(self);
     Py_RETURN_NONE;
 }
@@ -7007,6 +7032,7 @@ static PyMethodDef methods[] = {
                         MND(pause_rendering, METH_VARARGS) MND(hyperlink_at, METH_VARARGS) MND(toggle_alt_screen, METH_NOARGS) MND(reset_callbacks, METH_NOARGS)
                             MND(paste, METH_O) MND(paste_bytes, METH_O) MND(focus_changed, METH_O) MND(has_focus, METH_NOARGS)
                                 MND(has_activity_since_last_focus, METH_NOARGS) MND(copy_colors_from, METH_O) MND(set_marker, METH_VARARGS)
+                                    MND(set_annotation_marker, METH_VARARGS)
                                     MND(marked_cells, METH_NOARGS) MND(scroll_to_next_mark, METH_VARARGS) MND(update_only_line_graphics_data, METH_NOARGS)
                                         MND(bell, METH_NOARGS) MND(mark_potential_url_drag, METH_NOARGS) MND(current_selections, METH_NOARGS){
                                             "select_graphic_rendition", (PyCFunction)_select_graphic_rendition, METH_VARARGS, ""},

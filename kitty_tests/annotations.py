@@ -5,9 +5,11 @@ from functools import partial
 from unittest.mock import patch
 
 from kittens.annotations.main import Frame, ListHandler, key_event_for_char, truncate_to_width, visible_window, wrap_text
+from kittens.tui.loop import EventType, MouseButton, MouseEvent
 from kitty.annotations import Annotation, AnnotationStore, Location, format_annotations
 from kitty.fast_data_types import GLFW_MOUSE_BUTTON_LEFT, create_mock_window, mock_mouse_selection, send_mock_mouse_event_to_window
 from kitty.key_encoding import KeyEvent, parse_shortcut
+from kitty.marks import marker_from_text
 from kitty.window import cell_is_in_selection
 
 from .base import BaseTest
@@ -58,6 +60,14 @@ class TestAnnotations(BaseTest):
         self.assertIs(h.screen_size, resized)
         self.ae(h.ticked, {'a'})
         self.ae(h.query, 'output')
+
+        h.query = ''
+        h.entry_rows = {4: 1}
+        click = MouseEvent(0, 4, 0, 0, EventType.RELEASE, MouseButton.LEFT, 0)
+        h.on_click(click)
+        self.ae(h.idx, 1)
+        h.on_click(click)
+        self.ae(h.ticked, {'a', 'b'})
 
     def test_selection_bounds(self):
         s = self.create_screen()
@@ -137,6 +147,17 @@ class TestAnnotations(BaseTest):
         self.ae([x.id for x in st], [c.id])
         self.ae(st.remove_window(3), 1)
         self.ae(len(st), 0)
+
+    def test_annotation_highlight_coexists_with_user_marker(self):
+        s = self.create_screen()
+        s.draw('alpha beta')
+        s.set_marker(marker_from_text('alpha', 1))
+        s.set_annotation_marker(marker_from_text('beta', 3))
+        marks = s.marked_cells()
+        self.ae(sum(mark == 1 for _x, _y, mark in marks), 5)
+        self.ae(sum(mark == 3 for _x, _y, mark in marks), 4)
+        s.set_annotation_marker()
+        self.ae(sum(mark == 1 for _x, _y, mark in s.marked_cells()), 5)
 
     def test_annotation_round_trip(self):
         a = Annotation('some text', 'a note', Location(tab_id=3, window_id=4, tab_title='t', window_title='w', start_line=7, end_line=9))

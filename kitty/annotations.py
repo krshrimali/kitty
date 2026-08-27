@@ -8,6 +8,7 @@ kitty window. Annotations live for as long as the tab that contains them, they
 are not persisted to disk.
 """
 
+import re
 import time
 from collections.abc import Iterable, Iterator, Sequence
 from typing import Any, NamedTuple
@@ -181,3 +182,21 @@ def annotation_store() -> AnnotationStore:
     if _store is None:
         _store = AnnotationStore()
     return _store
+
+
+def refresh_annotation_markers(boss: Any) -> None:
+    'Refresh the independent marker used to keep annotated source text visible.'
+    from .marks import marker_from_regex
+
+    by_window: dict[int, set[str]] = {}
+    for annotation in annotation_store():
+        if annotation.location.window_id:
+            lines = by_window.setdefault(annotation.location.window_id, set())
+            lines.update(line for line in annotation.text.splitlines() if line)
+    for window_id, window in boss.window_id_map.items():
+        snippets = by_window.get(window_id)
+        if snippets:
+            expression = '|'.join(re.escape(x) for x in sorted(snippets, key=len, reverse=True))
+            window.screen.set_annotation_marker(marker_from_regex(expression, 3))
+        else:
+            window.screen.set_annotation_marker()
