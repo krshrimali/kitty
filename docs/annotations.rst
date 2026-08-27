@@ -53,6 +53,7 @@ Key                         Action
 :kbd:`a`                    Tick all annotations, or untick them all if any are ticked
 :kbd:`e`, :kbd:`Enter`      Edit the note of the current annotation in your editor
 :kbd:`d`                    Delete the current annotation
+:kbd:`u`                    Undo the most recent deletion
 :kbd:`y`                    Copy the ticked annotations, or all of them if none are ticked
 :kbd:`Y`                    Copy only the current annotation
 :kbd:`q`, :kbd:`Esc`        Close the panel, applying any edits and deletions

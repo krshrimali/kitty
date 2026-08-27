@@ -321,6 +321,7 @@ class ListHandler(Handler):
         self.show_help = False
         self.focus = 'list'
         self.detail_offset = 0
+        self.last_deleted: tuple[dict[str, Any], int] | None = None
 
     # helpers {{{
     @property
@@ -482,6 +483,7 @@ class ListHandler(Handler):
                 'Find: / search · Esc clear search',
                 'Selection: Space tick · a toggle all',
                 'Actions: e edit · d delete · y copy · Y copy current · q quit',
+                'Safety: u undo the most recent deletion',
                 'Press ? to close help',
             )
             lines = lines[: max(0, sz.rows - len(help_lines) - 2)]
@@ -571,10 +573,26 @@ class ListHandler(Handler):
             if cur is not None:
                 self.deleted.append(cur['id'])
                 self.ticked.discard(cur['id'])
-                self.edited.pop(cur['id'], None)
+                original_idx = self.annotations.index(cur)
+                self.last_deleted = cur, original_idx
                 self.annotations.remove(cur)
                 self.idx = min(self.idx, max(0, len(self.displayed) - 1))
-                self.message = 'Annotation deleted'
+                self.message = 'Annotation deleted · u undo'
+        elif key_event.matches('u'):
+            if self.last_deleted is None:
+                self.message = 'Nothing to undo'
+            else:
+                annotation, original_idx = self.last_deleted
+                self.annotations.insert(min(original_idx, len(self.annotations)), annotation)
+                try:
+                    self.deleted.remove(annotation['id'])
+                except ValueError:
+                    pass
+                self.last_deleted = None
+                shown = self.displayed
+                if annotation in shown:
+                    self.idx = shown.index(annotation)
+                self.message = 'Deletion undone'
         elif key_event.matches('e') or key_event.matches('enter'):
             cur = self.current
             if cur is not None:

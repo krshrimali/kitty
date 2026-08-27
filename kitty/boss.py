@@ -2705,8 +2705,24 @@ class Boss:
     def clear_annotations(self, scope: str = 'tab') -> None:
         from .annotations import annotation_store
 
-        store = annotation_store()
-        store.remove(a.id for a in self.annotations_for_scope(scope)[0])
+        annotations, title = self.annotations_for_scope(scope)
+        if not annotations:
+            self.show_error(_('No annotations'), _('There are no annotations to delete in the scope: {}').format(scope))
+            return
+        self.confirm(
+            _('Delete all {} annotations in {}? This cannot be undone.').format(len(annotations), title),
+            self.handle_clear_annotations_confirmation,
+            tuple(a.id for a in annotations),
+            window=self.window_for_dispatch,
+            confirm_on_accept=False,
+            title=_('Delete annotations?'),
+        )
+
+    def handle_clear_annotations_confirmation(self, confirmed: bool, annotation_ids: tuple[str, ...]) -> None:
+        if confirmed:
+            from .annotations import annotation_store
+
+            annotation_store().remove(annotation_ids)
 
     # }}}
 
