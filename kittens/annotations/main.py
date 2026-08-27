@@ -35,6 +35,10 @@ def accent(text: str) -> str:
     return styled(text, fg='green', bold=True)
 
 
+def key_hint(key: str, action: str) -> str:
+    return f'{bold(key)} {dim(action)}'
+
+
 def truncate_to_width(text: str, width: int) -> str:
     if width < 1:
         return ''
@@ -195,29 +199,39 @@ class AddHandler(Handler):
         sz = self.screen_size
         f = Frame(sz.cols)
         title = 'Edit annotation' if self.editing_existing else 'Annotate selection'
-        lines = ['', f.top(title, location_text(self.location))]
+        loc = location_text(self.location)
+        lines = ['', f.top(title, 'selected text')]
+        if loc:
+            lines.append(f.text(dim(truncate_to_width('From  ' + loc, f.width))))
+            lines.append('')
         text_lines = self.text.splitlines() or ['']
-        room = max(2, sz.rows - 10)
+        room = max(2, sz.rows - 13)
         for line in text_lines[:room]:
-            lines.append(f.row(dim(truncate_to_width(sanitize(line), f.inner)), min(f.inner, wcswidth(sanitize(line)))))
+            raw = truncate_to_width(sanitize(line), max(1, f.inner - 2))
+            content = accent('┃') + ' ' + dim(raw)
+            lines.append(f.row(content, 2 + wcswidth(raw)))
         if len(text_lines) > room:
-            extra = f'… {len(text_lines) - room} more lines …'
+            extra = f'Showing {room} of {len(text_lines)} lines · {len(text_lines) - room} hidden'
             lines.append(f.row(dim(extra), wcswidth(extra)))
         lines.append(f.bottom())
         lines.append('')
+        lines.append(f.rule('Your note'))
         if self.multiline_note:
-            lines.append(f.rule('Note'))
             for line in wrap_text(self.multiline_note, f.width - 2)[: max(1, sz.rows - len(lines) - 3)]:
                 lines.append(f.indented(line))
             lines.append('')
-            lines.append(f.text(dim(truncate_to_width('enter save · ctrl+e re-edit in $EDITOR · esc cancel', f.width))))
+            actions = f'{key_hint("Enter", "Save")}  {key_hint("Ctrl+E", "Edit")}  {key_hint("Esc", "Cancel")}'
+            lines.append(f.text(truncate_to_width(actions, f.width)))
         else:
-            lines.append(f.text(dim(truncate_to_width('enter save · ctrl+e write a multi-line note in $EDITOR · esc cancel', f.width))))
-            lines.append('')
+            lines.append(f.row('', 0))
+            lines.append(f.bottom())
+            actions = f'{key_hint("Enter", "Save")}  {key_hint("Ctrl+E", "Editor")}  {key_hint("Esc", "Cancel")}'
+            lines.append(f.text(truncate_to_width(actions, f.width)))
         self.write('\r\n'.join(lines[: sz.rows]))
         if not self.multiline_note:
-            self.write('\r\n')
-            self.line_edit.write(self.write, f.pad + accent('note> '))
+            # Move back into the empty input row drawn immediately above the lower border.
+            self.write('\x1b[2A\r')
+            self.line_edit.write(self.write, f.pad + dim(VERTICAL) + ' ' + accent('note> '))
 
     def handle_special_key(self, key_event: KeyEvent) -> bool:
         if key_event.matches('esc'):
