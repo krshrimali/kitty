@@ -49,6 +49,9 @@ Key                         Action
 :kbd:`j`, :kbd:`down`       Move to the next annotation
 :kbd:`k`, :kbd:`up`         Move to the previous annotation
 :kbd:`g` / :kbd:`G`         Move to the first / last annotation
+:kbd:`Tab`                  Switch focus between the list and preview in wide terminals
+:kbd:`/`                    Search annotated text, notes and source information
+:kbd:`?`                    Show the keyboard help overlay
 :kbd:`space`                Tick or untick the current annotation
 :kbd:`a`                    Tick all annotations, or untick them all if any are ticked
 :kbd:`e`                    Edit the note of the current annotation in your editor
@@ -59,6 +62,11 @@ Key                         Action
 :kbd:`Y`                    Copy only the current annotation
 :kbd:`q`, :kbd:`Esc`        Close the panel, applying any edits and deletions
 =========================== ================================================================
+
+A filled diamond beside an annotation means its source window is still open;
+an empty diamond means the stored text remains available but the source window
+has closed. Pressing :kbd:`Enter` on a live source focuses its window and
+scrolls to the annotated line.
 
 
 What gets copied
