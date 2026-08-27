@@ -2665,6 +2665,7 @@ class Boss:
         payload = {
             'mode': 'list',
             'title': title,
+            'scope': scope,
             'format': fmt,
             'annotations': [dict(a.as_dict(), loc_desc=a.location.describe()) for a in annotations],
         }

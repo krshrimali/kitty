@@ -307,6 +307,7 @@ class ListHandler(Handler):
     def __init__(self, payload: dict[str, Any]) -> None:
         self.annotations: list[dict[str, Any]] = list(payload.get('annotations') or [])
         self.panel_title: str = payload.get('title') or 'Annotations'
+        self.scope: str = payload.get('scope') or 'tab'
         self.fmt: str = payload.get('format') or 'markdown'
         self.idx = 0
         self.ticked: set[str] = set()
@@ -360,6 +361,51 @@ class ListHandler(Handler):
         self.cmd.set_cursor_visible(False)
         self.draw_screen()
 
+    def visible_annotations(self, count: int) -> tuple[int, list[dict[str, Any]]]:
+        count = max(1, count)
+        start = max(0, min(self.idx - count // 2, len(self.annotations) - count))
+        return start, self.annotations[start : start + count]
+
+    def list_entry(self, i: int, a: dict[str, Any], width: int) -> tuple[str, int]:
+        is_current = i == self.idx
+        ticked = a['id'] in self.ticked
+        marker = accent('▸') if is_current else ' '
+        tick = styled('✓', fg='green', bold=True) if ticked else dim('·')
+        head = truncate_to_width(f'{i + 1}. {first_line_of(a.get("text", ""))}', max(1, width - 5))
+        raw_width = 5 + wcswidth(head)
+        head = bold(head) if is_current else (styled(head, fg='green') if ticked else head)
+        return f'{marker} {tick}  {head}', raw_width
+
+    def draw_wide_panel(self, f: Frame, rows: int, lines: list[str]) -> None:
+        left_width = min(46, max(32, f.inner * 2 // 5))
+        right_width = f.inner - left_width - 3
+        cur = self.current
+        detail: list[tuple[str, int]] = []
+        if cur is not None:
+            detail.append((bold('ANNOTATED TEXT'), len('ANNOTATED TEXT')))
+            for line in (cur.get('text', '') or '').splitlines() or ['']:
+                raw = truncate_to_width(sanitize(line), right_width)
+                detail.append((dim(raw), wcswidth(raw)))
+            detail.append(('', 0))
+            detail.append((bold('NOTE'), len('NOTE')))
+            for line in wrap_text(self.note_for(cur) or '(no note)', right_width):
+                detail.append((line, wcswidth(line)))
+        available = max(3, rows - 7)
+        start, shown = self.visible_annotations(available // 2)
+        list_rows: list[tuple[str, int]] = []
+        for i, a in enumerate(shown, start):
+            list_rows.append(self.list_entry(i, a, left_width))
+            loc = location_text(a.get('location') or {})
+            note = self.note_for(a).replace('\n', ' ⏎ ') or '(no note)'
+            raw = truncate_to_width(f'{loc} · {note}' if loc else note, max(1, left_width - 5))
+            list_rows.append(('     ' + dim(raw), 5 + wcswidth(raw)))
+        body_rows = min(available, max(len(list_rows), len(detail), 3))
+        for n in range(body_rows):
+            lc, lw = list_rows[n] if n < len(list_rows) else ('', 0)
+            rc, rw = detail[n] if n < len(detail) else ('', 0)
+            content = lc + ' ' * max(0, left_width - lw) + dim(' │ ') + rc
+            lines.append(f.row(content, left_width + 3 + rw))
+
     def finalize(self) -> None:
         self.cmd.set_cursor_visible(True)
 
@@ -368,26 +414,25 @@ class ListHandler(Handler):
         self.cmd.clear_screen()
         sz = self.screen_size
         f = Frame(sz.cols)
-        tag = f'{len(self.ticked)} ticked of {len(self.annotations)}' if self.ticked else f'{len(self.annotations)}'
+        position = f'{self.idx + 1}/{len(self.annotations)}' if self.annotations else '0/0'
+        tag = f'{len(self.ticked)} ticked · {position}' if self.ticked else position
         lines = ['', f.top(self.panel_title, tag)]
+        context = f'{self.scope.capitalize()} · {self.fmt.capitalize()}'
+        lines.append(f.text(dim(truncate_to_width(context, f.width))))
+        lines.append('')
         if not self.annotations:
             for msg in ('', 'No annotations yet.', 'Select some text and press the annotate shortcut.', ''):
                 lines.append(f.row(dim(msg), wcswidth(msg)))
-        # chrome: one blank line, two border lines, the detail pane and the footer
-        visible = max(1, (sz.rows - 13) // 3)
-        start = max(0, min(self.idx - visible // 2, len(self.annotations) - visible))
-        for i, a in enumerate(self.annotations[start : start + visible], start):
+        elif f.width >= 90:
+            self.draw_wide_panel(f, sz.rows, lines)
+        # chrome: title/context, border lines, detail pane and footer
+        visible = max(1, (sz.rows - 15) // 3)
+        start, shown = self.visible_annotations(visible)
+        for i, a in (() if f.width >= 90 else enumerate(shown, start)):
             if i > start:
                 lines.append(f.row())
-            is_current = i == self.idx
-            ticked = a['id'] in self.ticked
-            marker = accent('▸') if is_current else ' '
-            tick = styled('✓', fg='green', bold=True) if ticked else dim('·')
-            head = f'{i + 1}. {first_line_of(a.get("text", ""))}'
-            head = truncate_to_width(head, f.inner - 5)
-            width_used = 5 + wcswidth(head)
-            head = bold(head) if is_current else (styled(head, fg='green') if ticked else head)
-            lines.append(f.row(f'{marker} {tick}  {head}', width_used))
+            head, width_used = self.list_entry(i, a, f.inner)
+            lines.append(f.row(head, width_used))
             loc = location_text(a.get('location') or {})
             note = self.note_for(a).replace('\n', ' ⏎ ') or '(no note)'
             sub = truncate_to_width(f'{loc} · {note}' if loc else note, f.inner - 5)
@@ -395,7 +440,7 @@ class ListHandler(Handler):
         lines.append(f.bottom())
 
         cur = self.current
-        if cur is not None:
+        if cur is not None and f.width < 90:
             lines.append('')
             lines.append(f.rule('Annotated text'))
             text_lines = (cur.get('text', '') or '').splitlines() or ['']
