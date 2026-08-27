@@ -8,6 +8,19 @@ image:https://github.com/kovidgoyal/kitty/workflows/CI/badge.svg["Build status",
 
 https://sw.kovidgoyal.net/kitty/faq/[Frequently Asked Questions]
 
+== Using annotations with Claude Code
+
+Claude Code's fullscreen renderer captures the mouse and uses the alternate
+screen, which prevents kitty's native text selection and annotations from
+working normally. Launch Claude Code with both behaviors disabled:
+
+....
+CLAUDE_CODE_DISABLE_MOUSE=1 CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 claude
+....
+
+For convenience, this can be configured as a shell alias named
+`claude-kitty`.
+
 To ask other questions about kitty usage, use either the https://github.com/kovidgoyal/kitty/discussions/[discussions on GitHub] or the
 https://www.reddit.com/r/KittyTerminal[Reddit community]
 

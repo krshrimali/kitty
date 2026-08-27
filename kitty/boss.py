@@ -182,6 +182,7 @@ from .utils import (
 from .window import CommandOutput, CwdRequest, Window, global_watchers
 
 if TYPE_CHECKING:
+    from .annotations import Annotation, Location
     from .fast_data_types import OSWindowSize
     from .rc.base import ResponseType
 # }}}
@@ -2613,6 +2614,100 @@ class Boss:
     @ac('misc', 'Input an arbitrary unicode character. See :doc:`/kittens/unicode_input` for details.')
     def input_unicode_character(self) -> None:
         self.run_kitten_with_metadata('unicode_input', window=self.window_for_dispatch)
+
+    # annotations {{{
+    def create_annotation(self, window: Window, text: str, location: 'Location', note: str = '') -> None:
+        'Attach a note to a piece of text, prompting the user for the note if it is not specified'
+        from .annotations import Annotation, annotation_store
+
+        if note:
+            annotation_store().add(Annotation(text=text, note=note, location=location))
+            return
+        data = json.dumps({'mode': 'add', 'text': text, 'location': location._asdict(), 'note': ''})
+        self.run_kitten_with_metadata('annotations', ['--mode=add'], input_data=data, window=window)
+
+    def annotations_for_scope(self, scope: str = 'tab') -> tuple[list['Annotation'], str]:
+        'The annotations in the specified scope along with a description of the scope'
+        from .annotations import annotation_store
+
+        store = annotation_store()
+        w = self.window_for_dispatch or self.active_window
+        if scope == 'all':
+            return list(store), 'Annotations · all tabs'
+        if scope == 'window':
+            if w is None:
+                return [], 'Annotations'
+            return store.for_window(w.id), f'Annotations · window: {w.title}'
+        tab = (w.tabref() if w is not None else None) or self.active_tab
+        if tab is None:
+            return [], 'Annotations'
+        return store.for_tab(tab.id), f'Annotations · tab: {tab.effective_title}'
+
+    @ac(
+        'annot',
+        """
+        Show the annotations panel
+
+        The panel lists the annotations in the current tab and lets you tick the
+        ones you want, edit their notes in your editor, delete them and copy them
+        to the clipboard. The scope can be one of ``tab`` (the default),
+        ``window`` or ``all``. The second, optional, parameter is the format used
+        when copying annotations from the panel, either ``markdown`` (the
+        default) or ``plain``::
+
+            map f1 show_annotations
+            map f2 show_annotations all
+            map f3 show_annotations tab plain
+        """,
+    )
+    def show_annotations(self, scope: str = 'tab', fmt: str = 'markdown') -> None:
+        annotations, title = self.annotations_for_scope(scope)
+        payload = {
+            'mode': 'list',
+            'title': title,
+            'format': fmt,
+            'annotations': [dict(a.as_dict(), loc_desc=a.location.describe()) for a in annotations],
+        }
+        self.run_kitten_with_metadata('annotations', ['--mode=list'], input_data=json.dumps(payload), window=self.window_for_dispatch)
+
+    @ac(
+        'annot',
+        """
+        Copy the annotations in the specified scope to the clipboard
+
+        The copied text includes both the note and the text it was attached to
+        along with where that text came from. The scope can be one of ``tab``
+        (the default), ``window`` or ``all``. The second, optional, parameter is
+        the format, either ``markdown`` (the default) or ``plain``::
+
+            map f4 copy_annotations
+            map f5 copy_annotations all plain
+        """,
+    )
+    def copy_annotations(self, scope: str = 'tab', fmt: str = 'markdown') -> None:
+        from .annotations import format_annotations
+
+        annotations = self.annotations_for_scope(scope)[0]
+        if not annotations:
+            self.show_error(_('No annotations'), _('There are no annotations to copy in the scope: {}').format(scope))
+            return
+        set_clipboard_string(format_annotations(annotations, fmt))
+
+    @ac(
+        'annot',
+        """
+        Delete the annotations in the specified scope
+
+        The scope can be one of ``tab`` (the default), ``window`` or ``all``.
+        """,
+    )
+    def clear_annotations(self, scope: str = 'tab') -> None:
+        from .annotations import annotation_store
+
+        store = annotation_store()
+        store.remove(a.id for a in self.annotations_for_scope(scope)[0])
+
+    # }}}
 
     @ac(
         'misc',

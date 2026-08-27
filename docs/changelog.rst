@@ -201,6 +201,10 @@ Detailed list of changes
 
 - Support for :doc:`/custom-shaders` for adding various graphical effects (:iss:`10344`)
 
+- :doc:`Annotations </annotations>`: attach notes to text on the screen, review them in a floating panel and copy them, together with the text they refer to, to the clipboard
+
+- Right clicking inside a selection now annotates it, see :doc:`/annotations`. Right clicking anywhere else extends the selection as before
+
 - Various throughput performance improvements for a 15-35% real world improvement depending on workload
 
 - A new option :opt:`remap_modifiers` to allow having modifier keys behave as different modifier keys (:pull:`10307`)

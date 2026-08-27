@@ -1139,6 +1139,9 @@ class Screen:
     def has_selection(self) -> bool:
         pass
 
+    def selection_bounds(self) -> Tuple[Dict[str, Any], ...]:
+        pass
+
     def text_for_selection(self, ansi: bool, strip_trailing_spaces: bool) -> Tuple[str, ...]:
         pass
 

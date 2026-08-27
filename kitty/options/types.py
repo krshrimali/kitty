@@ -1010,6 +1010,18 @@ defaults.map = [
     KeyDefinition(is_sequence=True, trigger=SingleKey(mods=256, key=112), rest=(SingleKey(key=110),), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='kitten hints --type linenum'),
     # open_selected_hyperlink
     KeyDefinition(is_sequence=True, trigger=SingleKey(mods=256, key=112), rest=(SingleKey(key=121),), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='kitten hints --type hyperlink'),
+    # annotate_selection
+    KeyDefinition(is_sequence=True, trigger=SingleKey(mods=256, key=109), rest=(SingleKey(key=109),), definition='annotate_selection'),
+    # annotate_last_cmd_output
+    KeyDefinition(is_sequence=True, trigger=SingleKey(mods=256, key=109), rest=(SingleKey(key=111),), definition='annotate_last_cmd_output'),
+    # show_annotations
+    KeyDefinition(is_sequence=True, trigger=SingleKey(mods=256, key=109), rest=(SingleKey(key=108),), definition='show_annotations'),
+    # show_annotations_all
+    KeyDefinition(is_sequence=True, trigger=SingleKey(mods=256, key=109), rest=(SingleKey(key=97),), definition='show_annotations all'),
+    # copy_annotations
+    KeyDefinition(is_sequence=True, trigger=SingleKey(mods=256, key=109), rest=(SingleKey(key=121),), definition='copy_annotations'),
+    # clear_annotations
+    KeyDefinition(is_sequence=True, trigger=SingleKey(mods=256, key=109), rest=(SingleKey(key=120),), definition='clear_annotations'),
     # show_kitty_doc
     KeyDefinition(trigger=SingleKey(mods=256, key=57364), definition='show_kitty_doc overview'),
     # command_palette
@@ -1124,7 +1136,7 @@ defaults.mouse_map = [
     # select_line_from_point
     MouseMapping(mods=6, repeat_count=3, definition='mouse_selection line_from_point'),
     # extend_selection
-    MouseMapping(button=1, definition='mouse_selection extend'),
+    MouseMapping(button=1, definition='mouse_annotate_selection'),
     # extend_selection_shift
     MouseMapping(mods=1, definition='mouse_selection extend'),
     # paste_selection_grabbed
@@ -1156,9 +1168,9 @@ defaults.mouse_map = [
     # select_line_from_point_grabbed
     MouseMapping(mods=7, repeat_count=3, definition='mouse_selection line_from_point'),
     # extend_selection_grabbed
-    MouseMapping(button=1, mods=1, grabbed=True, definition='mouse_selection extend'),
+    MouseMapping(button=1, mods=1, grabbed=True, definition='mouse_annotate_selection'),
     # extend_selection_grabbed
-    MouseMapping(button=1, mods=1, definition='mouse_selection extend'),
+    MouseMapping(button=1, mods=1, definition='mouse_annotate_selection'),
     # show_clicked_cmd_output_ungrabbed
     MouseMapping(button=1, mods=5, definition='mouse_show_command_output'),
 ]

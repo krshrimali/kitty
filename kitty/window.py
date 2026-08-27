@@ -47,6 +47,7 @@ from .fast_data_types import (
     GLFW_PRESS,
     GLFW_RELEASE,
     GLFW_REPEAT,
+    MOUSE_SELECTION_EXTEND,
     MOUSE_SELECTION_NORMAL,
     NO_CURSOR_SHAPE,
     NULL_COLOR_VALUE,
@@ -138,9 +139,24 @@ class ScrollAnimation:
 if TYPE_CHECKING:
     from kittens.tui.handler import OpenUrlHandler
 
+    from .annotations import Location
     from .fast_data_types import MousePosition
     from .file_transmission import FileTransmission
     from .notifications import OnlyWhen
+
+
+def cell_is_in_selection(mask: bytes, columns: int, lines: int, cell_x: int, cell_y: int) -> bool:
+    """Whether a cell is selected, according to the mask from Screen.current_selections()
+
+    The mask has one byte per rendered cell with the lowest bit set for cells that
+    are part of a selection. It can have an extra leading row compared to the
+    screen when pixel scrolling is active.
+    """
+    if columns < 1 or not 0 <= cell_x < columns or not 0 <= cell_y < lines:
+        return False
+    extra_leading_rows = len(mask) // columns - lines
+    idx = (cell_y + extra_leading_rows) * columns + cell_x
+    return 0 <= idx < len(mask) and bool(mask[idx] & 1)
 
 
 class CwdRequestType(Enum):
@@ -2610,6 +2626,108 @@ class Window:
     @ac('cp', 'Clear the current selection')
     def clear_selection(self) -> None:
         self.screen.clear_selection()
+
+    # annotations {{{
+    def annotation_location(self, start_line: int = 0, end_line: int = 0, label: str = '') -> 'Location':
+        from .annotations import Location
+
+        tab = self.tabref()
+        return Location(
+            tab_id=self.tab_id,
+            window_id=self.id,
+            tab_title=tab.effective_title if tab is not None else '',
+            window_title=self.title,
+            start_line=start_line,
+            end_line=end_line,
+            cwd=self.cwd_of_child or '',
+            label=label,
+        )
+
+    def selection_with_location(self) -> tuple[str, 'Location'] | None:
+        'The currently selected text along with a description of where it came from'
+        text = self.text_for_selection()
+        if not text.strip():
+            return None
+        start_line = end_line = 0
+        bounds = self.screen.selection_bounds()
+        if bounds:
+            # y is relative to the top of the screen with negative values being
+            # lines in the scrollback, convert to 1-based line numbers counted
+            # from the start of the scrollback
+            offset = self.screen.historybuf.count + 1
+            ys = [b['start_y'] for b in bounds] + [b['end_y'] for b in bounds]
+            start_line, end_line = offset + min(ys), offset + max(ys)
+        return text, self.annotation_location(start_line, end_line)
+
+    @ac(
+        'annot',
+        """
+        Annotate the currently selected text
+
+        Opens a small overlay in which you can type a note to attach to the
+        selected text. If you specify the note as an argument to this action, the
+        overlay is skipped and the annotation is created immediately::
+
+            map f1 annotate_selection
+            map f2 annotate_selection needs a closer look
+        """,
+    )
+    def annotate_selection(self, note: str = '') -> None:
+        q = self.selection_with_location()
+        if q is None:
+            get_boss().show_error(_('No selected text'), _('Select some text with the mouse before annotating it'))
+            return
+        get_boss().create_annotation(self, q[0], q[1], note)
+
+    def mouse_is_in_selection(self) -> bool:
+        'Whether the mouse is over a cell that is part of the current selection'
+        if not self.has_selection():
+            return False
+        mp = self.current_mouse_position()
+        if mp is None:
+            return False
+        return cell_is_in_selection(self.screen.current_selections(), self.screen.columns, self.screen.lines, mp['cell_x'], mp['cell_y'])
+
+    @ac(
+        'annot',
+        """
+        Annotate the selected text when the mouse is inside the selection
+
+        Meant to be used with :opt:`mouse_map`. When the mouse is inside the
+        selection, the selection is annotated, otherwise the click extends the
+        selection, which is what an unmapped right click does. This means it can
+        be mapped to a plain right click without losing the ability to adjust a
+        selection::
+
+            mouse_map right press ungrabbed mouse_annotate_selection
+
+        As with :ac:`annotate_selection`, specifying the note as an argument
+        creates the annotation without showing the overlay.
+        """,
+    )
+    def mouse_annotate_selection(self, note: str = '') -> None:
+        if self.mouse_is_in_selection():
+            self.annotate_selection(note)
+        else:
+            self.mouse_selection(MOUSE_SELECTION_EXTEND)
+
+    @ac(
+        'annot',
+        """
+        Annotate the output of the last command that was run
+
+        Requires :ref:`shell_integration` to work. Useful to annotate the output
+        of a command without having to select it with the mouse first.
+        """,
+    )
+    def annotate_last_cmd_output(self, note: str = '') -> None:
+        text = self.cmd_output(CommandOutput.last_run, as_ansi=False, add_wrap_markers=False)
+        if not text.strip():
+            get_boss().show_error(_('No command output'), _('There is no output from the last command to annotate'))
+            return
+        get_boss().create_annotation(self, text, self.annotation_location(label='output of the last command'), note)
+
+    # }}}
 
     def scroll_fractional_lines(self, amt: float) -> bool | None:
         "Scroll fractionally, negative values are up and positive values are down"

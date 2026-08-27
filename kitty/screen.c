@@ -5668,6 +5668,29 @@ text_for_selection(Screen *self, PyObject *args) {
 }
 
 static PyObject *
+selection_bounds(Screen *self, PyObject *a UNUSED) {
+    const Selections *selections = &self->selections;
+    PyObject *ans = PyTuple_New(selections->count);
+    if (!ans) return NULL;
+    for (size_t i = 0; i < selections->count; i++) {
+        const Selection *s = selections->items + i;
+        // y is normalized so that zero is the top line of the screen and
+        // negative values are lines in the scrollback history
+        const int start_y = (int)s->start.y - (int)s->start_scrolled_by;
+        const int end_y = (int)s->end.y - (int)s->end_scrolled_by;
+        PyObject *item = Py_BuildValue(
+            "{si si si si sO}", "start_x", (int)s->start.x, "start_y", start_y, "end_x", (int)s->end.x, "end_y", end_y, "rectangle_select",
+            s->rectangle_select ? Py_True : Py_False);
+        if (!item) {
+            Py_CLEAR(ans);
+            return NULL;
+        }
+        PyTuple_SET_ITEM(ans, i, item);
+    }
+    return ans;
+}
+
+static PyObject *
 text_for_marked_url(Screen *self, PyObject *args) {
     int ansi = 0, strip_trailing_whitespace = 0;
     if (!PyArg_ParseTuple(args, "|pp", &ansi, &strip_trailing_whitespace)) return NULL;
@@ -6977,7 +7000,8 @@ static PyMethodDef methods[] = {
                 MND(update_selection, METH_VARARGS){"clear_selection", (PyCFunction)clear_selection_, METH_NOARGS, ""},
     MND(reverse_index, METH_NOARGS) MND(mark_as_dirty, METH_NOARGS) MND(reload_all_gpu_data, METH_NOARGS) MND(resize, METH_VARARGS)
         MND(ignore_bells_for, METH_VARARGS) MND(set_margins, METH_VARARGS) MND(detect_url, METH_VARARGS) MND(rescale_images, METH_NOARGS)
-            MND(current_key_encoding_flags, METH_NOARGS) MND(text_for_selection, METH_VARARGS) MND(text_for_marked_url, METH_VARARGS)
+            MND(current_key_encoding_flags, METH_NOARGS) MND(text_for_selection, METH_VARARGS) MND(selection_bounds, METH_NOARGS)
+                MND(text_for_marked_url, METH_VARARGS)
                 MND(is_rectangle_select, METH_NOARGS) MND(scroll, METH_VARARGS) MND(scroll_to_absolute, METH_O) MND(fractional_scroll, METH_O)
                     MND(scroll_to_prompt, METH_VARARGS) MND(set_last_visited_prompt, METH_VARARGS) MND(send_escape_code_to_child, METH_VARARGS)
                         MND(pause_rendering, METH_VARARGS) MND(hyperlink_at, METH_VARARGS) MND(toggle_alt_screen, METH_NOARGS) MND(reset_callbacks, METH_NOARGS)

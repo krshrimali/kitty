@@ -18,7 +18,7 @@ from pty import CHILD, STDIN_FILENO, STDOUT_FILENO, fork
 from unittest import TestCase
 
 from kitty.config import finalize_keys, finalize_mouse_mappings
-from kitty.fast_data_types import TEXT_SIZE_CODE, Cursor, HistoryBuf, LineBuf, Screen, get_options, monotonic, set_options
+from kitty.fast_data_types import MOUSE_SELECTION_EXTEND, TEXT_SIZE_CODE, Cursor, HistoryBuf, LineBuf, Screen, get_options, monotonic, set_options
 from kitty.options.parse import merge_result_dicts
 from kitty.options.types import Options, defaults
 from kitty.rgb import to_color
@@ -165,6 +165,13 @@ class Callbacks:
 
     def finish_scroll_animation(self) -> None:
         pass
+
+    def mouse_annotate_selection(self, note=''):
+        # Window.mouse_annotate_selection annotates when the mouse is inside the
+        # selection and extends the selection otherwise. Annotating needs a real
+        # window, so tests can only exercise the extend fallback. The containment
+        # check itself is tested in kitty_tests.annotations.
+        self.mouse_selection(MOUSE_SELECTION_EXTEND)
 
     def on_mouse_event(self, event):
         ev = MouseEvent(**event)

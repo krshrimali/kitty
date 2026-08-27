@@ -281,6 +281,34 @@ def paste_parse(func: str, rest: str) -> FuncArgsType:
     return func, [text]
 
 
+@func_with_args('annotate_selection', 'annotate_last_cmd_output', 'mouse_annotate_selection')
+def annotate_parse(func: str, rest: str) -> FuncArgsType:
+    return func, [rest.strip()]
+
+
+def parse_annotations_scope(scope: str) -> str:
+    scope = scope.strip().lower() or 'tab'
+    if scope not in ('tab', 'window', 'all'):
+        log_error(f'Ignoring unknown annotations scope: {scope}')
+        scope = 'tab'
+    return scope
+
+
+@func_with_args('show_annotations', 'copy_annotations')
+def annotations_scope_and_format(func: str, rest: str) -> FuncArgsType:
+    scope, _, fmt = rest.strip().partition(' ')
+    fmt = fmt.strip().lower() or 'markdown'
+    if fmt not in ('markdown', 'plain'):
+        log_error(f'Ignoring unknown annotations format: {fmt}')
+        fmt = 'markdown'
+    return func, [parse_annotations_scope(scope), fmt]
+
+
+@func_with_args('clear_annotations')
+def clear_annotations_parse(func: str, rest: str) -> FuncArgsType:
+    return func, [parse_annotations_scope(rest)]
+
+
 @func_with_args('neighboring_window')
 def neighboring_window(func: str, rest: str) -> FuncArgsType:
     rest = rest.lower()

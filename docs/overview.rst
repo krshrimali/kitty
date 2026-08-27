@@ -286,3 +286,17 @@ running programs or similar. To learn how this feature works, see :doc:`marks`.
    :hidden:
 
    marks
+
+
+Annotations
+--------------
+
+kitty can attach notes to pieces of text on the screen and then copy those notes
+along with the text they refer to. This is useful for reviewing the output of a
+program, a diff or an AI coding agent without leaving the terminal. To learn how
+this feature works, see :doc:`annotations`.
+
+.. toctree::
+   :hidden:
+
+   annotations

@@ -227,7 +227,7 @@ def modmap() -> dict[str, int]:
     }
 
 
-ActionGroup = Literal['cp', 'sc', 'win', 'tab', 'fs', 'mouse', 'mk', 'lay', 'misc', 'debug', 'session']
+ActionGroup = Literal['cp', 'sc', 'win', 'tab', 'fs', 'mouse', 'mk', 'lay', 'misc', 'debug', 'session', 'annot']
 
 
 class ActionSpec(NamedTuple):

@@ -56,7 +56,7 @@ def generate_class(defn: Definition, loc: str) -> tuple[str, str]:
     def option_type_data(option: Option | MultiOption) -> tuple[Callable[[Any], Any], str]:
         func = option.parser_func
         if func.__module__ == 'builtins':
-            assert isinstance(func, types.FunctionType)
+            assert isinstance(func, types.FunctionType | type)
             return func, func.__name__
         th = get_type_hints(func)
         rettype = th['return']
@@ -87,7 +87,7 @@ def generate_class(defn: Definition, loc: str) -> tuple[str, str]:
         if isinstance(option, MultiOption):
             mval: dict[str, dict[str, Any]] = {'macos': {}, 'linux': {}, '': {}}
             func, typ = option_type_data(option)
-            assert isinstance(func, types.FunctionType)
+            assert isinstance(func, types.FunctionType | type)
             for val in option:
                 if val.add_to_default:
                     gr = mval[val.only]
@@ -116,7 +116,7 @@ def generate_class(defn: Definition, loc: str) -> tuple[str, str]:
             func = str
         elif defn.has_color_table and option.is_color_table_color:
             func, typ = option_type_data(option)
-            assert isinstance(func, types.FunctionType)
+            assert isinstance(func, types.FunctionType | type)
             t(f'        ans[{option.name!r}] = {func.__name__}(val)')
             tc_imports.add((func.__module__, func.__name__))
             cnum = int(option.name[5:])
@@ -131,7 +131,7 @@ def generate_class(defn: Definition, loc: str) -> tuple[str, str]:
                 params = dict(inspect.signature(func).parameters)
             except Exception:
                 params = {}
-            assert isinstance(func, types.FunctionType)
+            assert isinstance(func, types.FunctionType | type)
             if 'dict_with_parse_results' in params:
                 t(f'        {func.__name__}(val, ans)')
             else:
@@ -189,7 +189,7 @@ def generate_class(defn: Definition, loc: str) -> tuple[str, str]:
     for aname, action in defn.actions.items():
         option_names.add(aname)
         action_parsers[aname] = func = action.parser_func
-        assert isinstance(func, types.FunctionType)
+        assert isinstance(func, types.FunctionType | type)
         th = get_type_hints(func)
         rettype = th['return']
         typ = option_type_as_str(rettype)

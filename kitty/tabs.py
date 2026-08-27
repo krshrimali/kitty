@@ -1273,7 +1273,10 @@ class Tab:  # {{{
         return window in self.windows
 
     def destroy(self) -> None:
+        from .annotations import annotation_store
+
         evict_cached_layouts(self.id)
+        annotation_store().remove_tab(self.id)
         for w in self.windows:
             w.destroy()
         self.windows = WindowList(self)

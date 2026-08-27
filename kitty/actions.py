@@ -29,6 +29,7 @@ groups: dict[ActionGroup, str] = {
     'misc': 'Miscellaneous',
     'debug': 'Debugging',
     'session': 'Sessions',
+    'annot': 'Annotations',
 }
 group_title = groups.__getitem__
 

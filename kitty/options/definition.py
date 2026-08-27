@@ -1312,9 +1312,15 @@ mma(
 )
 
 mma(
-    'Extend the current selection',
-    'extend_selection right press ungrabbed mouse_selection extend',
+    'Annotate the selection, or extend it',
+    'extend_selection right press ungrabbed mouse_annotate_selection',
     long_text="""
+Right clicking inside the selection annotates it, see :doc:`/annotations`. Right
+clicking anywhere else extends the selection to the click, as it always has. To
+get back the old behavior of always extending the selection, use::
+
+    mouse_map right press ungrabbed mouse_selection extend
+
 If you want only the end of the selection to be moved instead of the nearest
 boundary, use :code:`move-end` instead of :code:`extend`.
 """,
@@ -1373,8 +1379,17 @@ mma(
 )
 
 mma(
-    'Extend the current selection even when grabbed',
-    'extend_selection_grabbed shift+right press ungrabbed,grabbed mouse_selection extend',
+    'Annotate or extend the current selection even when grabbed',
+    'extend_selection_grabbed shift+right press ungrabbed,grabbed mouse_annotate_selection',
+    long_text="""
+Programs that grab the mouse, such as full screen TUIs, never see the plain right
+click mapping above, so use :kbd:`shift+right` in them. Combined with
+:kbd:`shift` dragging to select, this means the annotate gesture is the same
+everywhere. To get back the old behavior of always extending the selection,
+use::
+
+    mouse_map shift+right press ungrabbed,grabbed mouse_selection extend
+""",
 )
 
 mma(
@@ -4431,6 +4446,31 @@ egr("""
 The hints kitten has many more modes of operation that you can map to different
 shortcuts. For a full description see :doc:`hints kitten </kittens/hints>`.
 """)  # }}}
+
+
+# shortcuts.annotations {{{
+agr(
+    'shortcuts.annotations',
+    'Annotations',
+    """
+Annotations are notes you attach to a piece of text in a kitty window, useful
+for reviewing the output of a program without leaving the terminal. See
+:doc:`/annotations` for a full description.
+""",
+)
+
+map('Annotate the selected text', 'annotate_selection kitty_mod+m>m annotate_selection')
+
+map('Annotate the output of the last command', 'annotate_last_cmd_output kitty_mod+m>o annotate_last_cmd_output')
+
+map('Show the annotations panel for this tab', 'show_annotations kitty_mod+m>l show_annotations')
+
+map('Show the annotations panel for all tabs', 'show_annotations_all kitty_mod+m>a show_annotations all')
+
+map('Copy all annotations in this tab to the clipboard', 'copy_annotations kitty_mod+m>y copy_annotations')
+
+map('Delete all annotations in this tab', 'clear_annotations kitty_mod+m>x clear_annotations')
+egr()  # }}}
 
 
 # shortcuts.misc {{{
