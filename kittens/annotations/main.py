@@ -10,12 +10,12 @@ from typing import Any
 
 from kitty.fast_data_types import truncate_point_for_length, wcswidth
 from kitty.key_encoding import SHIFT, EventType, KeyEvent
-from kitty.typing_compat import BossType
+from kitty.typing_compat import BossType, MouseButton, MouseEvent
 
 from ..tui.handler import Handler, result_handler
 from ..tui.line_edit import LineEdit
 from ..tui.loop import Loop
-from ..tui.operations import styled, write_to_clipboard
+from ..tui.operations import MouseTracking, styled, write_to_clipboard
 
 # Drawing helpers {{{
 TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT = '╭', '╮', '╰', '╯'
@@ -315,6 +315,8 @@ class AddHandler(Handler):
 class ListHandler(Handler):
     'The annotations panel'
 
+    mouse_tracking = MouseTracking.buttons_only
+
     def __init__(self, payload: dict[str, Any]) -> None:
         self.annotations: list[dict[str, Any]] = list(payload.get('annotations') or [])
         self.panel_title: str = payload.get('title') or 'Annotations'
@@ -334,6 +336,7 @@ class ListHandler(Handler):
         self.detail_offset = 0
         self.last_deleted: tuple[dict[str, Any], int] | None = None
         self.jump_id = ''
+        self.entry_rows: dict[int, int] = {}
 
     # helpers {{{
     @property
@@ -439,6 +442,8 @@ class ListHandler(Handler):
             list_rows.append(('     ' + dim(raw), 5 + wcswidth(raw)))
         body_rows = min(available, max(len(list_rows), len(detail), 3))
         for n in range(body_rows):
+            if n < len(list_rows):
+                self.entry_rows[len(lines)] = start + n // 2
             lc, lw = list_rows[n] if n < len(list_rows) else ('', 0)
             rc, rw = detail[n] if n < len(detail) else ('', 0)
             content = lc + ' ' * max(0, left_width - lw) + dim(' │ ') + rc
@@ -456,6 +461,7 @@ class ListHandler(Handler):
         position = f'{self.idx + 1}/{len(shown)}' if shown else '0/0'
         tag = f'{len(self.ticked)} ticked · {position}' if self.ticked else position
         lines = ['', f.top(self.panel_title, tag)]
+        self.entry_rows = {}
         context = f'{self.scope.capitalize()} · {self.fmt.capitalize()}'
         if self.query:
             context += f' · Filter: {self.query}'
@@ -475,6 +481,8 @@ class ListHandler(Handler):
             if i > start:
                 lines.append(f.row())
             head, width_used = self.list_entry(i, a, f.inner)
+            self.entry_rows[len(lines)] = i
+            self.entry_rows[len(lines) + 1] = i
             lines.append(f.row(head, width_used))
             loc = location_text(a.get('location') or {})
             if not a.get('source_available'):
@@ -517,6 +525,30 @@ class ListHandler(Handler):
         if key_event.type is EventType.RELEASE:
             return
         self.on_key(key_event)
+
+    def on_mouse_event(self, mouse_event: MouseEvent) -> None:
+        if mouse_event.buttons == MouseButton.WHEEL_UP:
+            self.on_key(key_event_for_char('k'))
+        elif mouse_event.buttons == MouseButton.WHEEL_DOWN:
+            self.on_key(key_event_for_char('j'))
+        else:
+            super().on_mouse_event(mouse_event)
+
+    def on_click(self, mouse_event: MouseEvent) -> None:
+        if mouse_event.buttons != MouseButton.LEFT:
+            return
+        clicked = self.entry_rows.get(mouse_event.cell_y)
+        if clicked is None or clicked >= len(self.displayed):
+            return
+        if clicked == self.idx:
+            cur = self.current
+            if cur is not None:
+                self.ticked.symmetric_difference_update({cur['id']})
+                self.message = 'Annotation ticked' if cur['id'] in self.ticked else 'Annotation unticked'
+        else:
+            self.idx = clicked
+            self.detail_offset = 0
+        self.draw_screen()
 
     def on_text(self, text: str, in_bracketed_paste: bool = False) -> None:
         # characters the loop reports as plain text rather than as key escape codes
