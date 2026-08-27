@@ -2667,7 +2667,9 @@ class Boss:
             'title': title,
             'scope': scope,
             'format': fmt,
-            'annotations': [dict(a.as_dict(), loc_desc=a.location.describe()) for a in annotations],
+            'annotations': [
+                dict(a.as_dict(), loc_desc=a.location.describe(), source_available=a.location.window_id in self.window_id_map) for a in annotations
+            ],
         }
         self.run_kitten_with_metadata('annotations', ['--mode=list'], input_data=json.dumps(payload), window=self.window_for_dispatch)
 

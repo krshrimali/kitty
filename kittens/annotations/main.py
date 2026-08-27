@@ -322,6 +322,7 @@ class ListHandler(Handler):
         self.focus = 'list'
         self.detail_offset = 0
         self.last_deleted: tuple[dict[str, Any], int] | None = None
+        self.jump_id = ''
 
     # helpers {{{
     @property
@@ -389,7 +390,8 @@ class ListHandler(Handler):
         ticked = a['id'] in self.ticked
         marker = accent('▸') if is_current else ' '
         tick = styled('✓', fg='green', bold=True) if ticked else dim('·')
-        head = truncate_to_width(f'{i + 1}. {first_line_of(a.get("text", ""))}', max(1, width - 5))
+        source = '◆' if a.get('source_available') else '◇'
+        head = truncate_to_width(f'{i + 1}. {source} {first_line_of(a.get("text", ""))}', max(1, width - 5))
         raw_width = 5 + wcswidth(head)
         head = bold(head) if is_current else (styled(head, fg='green') if ticked else head)
         return f'{marker} {tick}  {head}', raw_width
@@ -416,6 +418,8 @@ class ListHandler(Handler):
         for i, a in enumerate(shown, start):
             list_rows.append(self.list_entry(i, a, left_width))
             loc = location_text(a.get('location') or {})
+            if not a.get('source_available'):
+                loc = f'{loc} · source closed' if loc else 'source closed'
             note = self.note_for(a).replace('\n', ' ⏎ ') or '(no note)'
             raw = truncate_to_width(f'{loc} · {note}' if loc else note, max(1, left_width - 5))
             list_rows.append(('     ' + dim(raw), 5 + wcswidth(raw)))
@@ -459,6 +463,8 @@ class ListHandler(Handler):
             head, width_used = self.list_entry(i, a, f.inner)
             lines.append(f.row(head, width_used))
             loc = location_text(a.get('location') or {})
+            if not a.get('source_available'):
+                loc = f'{loc} · source closed' if loc else 'source closed'
             note = self.note_for(a).replace('\n', ' ⏎ ') or '(no note)'
             sub = truncate_to_width(f'{loc} · {note}' if loc else note, f.inner - 5)
             lines.append(f.row('     ' + dim(sub), 5 + wcswidth(sub)))
@@ -483,6 +489,7 @@ class ListHandler(Handler):
                 'Find: / search · Esc clear search',
                 'Selection: Space tick · a toggle all',
                 'Actions: e edit · d delete · y copy · Y copy current · q quit',
+                'Source: Enter jump to source · ◆ available · ◇ closed',
                 'Safety: u undo the most recent deletion',
                 'Press ? to close help',
             )
@@ -593,7 +600,15 @@ class ListHandler(Handler):
                 if annotation in shown:
                     self.idx = shown.index(annotation)
                 self.message = 'Deletion undone'
-        elif key_event.matches('e') or key_event.matches('enter'):
+        elif key_event.matches('enter'):
+            cur = self.current
+            if cur is None or not cur.get('source_available'):
+                self.message = 'The source window is no longer available'
+            else:
+                self.jump_id = cur['id']
+                self.finish()
+                return
+        elif key_event.matches('e'):
             cur = self.current
             if cur is not None:
                 note = edit_note_in_editor(self, self.note_for(cur), cur.get('text', ''))
@@ -622,7 +637,7 @@ class ListHandler(Handler):
         self.message = f'Copied {n} annotation{"" if n == 1 else "s"} to the clipboard'
 
     def finish(self) -> None:
-        self.result = {'deleted': self.deleted, 'edited': self.edited, 'copy': self.copy_ids, 'format': self.fmt}
+        self.result = {'deleted': self.deleted, 'edited': self.edited, 'copy': self.copy_ids, 'format': self.fmt, 'jump': self.jump_id}
         self.quit_loop(0)
 
 
@@ -688,6 +703,13 @@ def handle_result(args: list[str], data: dict[str, Any] | None, target_window_id
         if text:
             set_clipboard_string(text)
     store.remove(data.get('deleted') or ())
+    if jump_id := data.get('jump'):
+        a = store.get(jump_id)
+        if a is not None and (window := boss.window_id_map.get(a.location.window_id)) is not None:
+            boss.set_active_window(window, switch_os_window_if_needed=True)
+            if a.location.start_line:
+                total_lines = window.screen.historybuf.count + window.screen.lines
+                window.screen.scroll_to_absolute(float(max(0, total_lines - a.location.start_line)))
 
 
 if __name__ == '__main__':
