@@ -2730,6 +2730,19 @@ opt('mark3_foreground', 'black', option_type='to_color', long_text='Color for ma
 
 opt('mark3_background', '#f274bc', option_type='to_color', long_text='Color for marks of type 3 (violet)')
 
+opt(
+    'annotation_highlight',
+    '3',
+    option_type='positive_int',
+    long_text='Which mark color to use for persistent annotation highlights. Use 1, 2 or 3 and configure the corresponding mark colors above.',
+)
+
+opt(
+    'annotation_storage',
+    'none',
+    long_text='Path to a JSON file used to persist annotations across kitty restarts. The default, none, keeps annotations only in memory. Stored terminal text can contain sensitive information.',
+)
+
 for i in range(16, 256):
     opt(f'color{i}', 'none', option_type='to_color_or_none', documented=False)
 egr()  # }}}

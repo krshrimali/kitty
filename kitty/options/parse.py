@@ -72,6 +72,12 @@ class Parser:
 
     choices_for_allow_remote_control = frozenset(('password', 'socket-only', 'socket', 'no', 'n', 'false', 'yes', 'y', 'true'))
 
+    def annotation_highlight(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['annotation_highlight'] = positive_int(val)
+
+    def annotation_storage(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['annotation_storage'] = str(val)
+
     def auto_reload_config(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['auto_reload_config'] = float(val)
 

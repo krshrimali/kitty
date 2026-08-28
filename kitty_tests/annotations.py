@@ -2,11 +2,14 @@
 # License: GPL v3 Copyright: 2026, Kovid Goyal <kovid at kovidgoyal.net>
 
 from functools import partial
+import os
+import tempfile
 from unittest.mock import patch
 
 from kittens.annotations.main import Frame, ListHandler, key_event_for_char, single_line_view, truncate_to_width, visible_window, wrap_text
 from kittens.tui.loop import EventType, MouseButton, MouseEvent
 from kitty.annotations import Annotation, AnnotationStore, Location, format_annotations
+from kitty import annotations as annotations_module
 from kitty.fast_data_types import GLFW_MOUSE_BUTTON_LEFT, create_mock_window, mock_mouse_selection, send_mock_mouse_event_to_window
 from kitty.key_encoding import KeyEvent, parse_shortcut
 from kitty.marks import marker_from_text
@@ -148,6 +151,23 @@ class TestAnnotations(BaseTest):
         self.ae([x.id for x in st], [c.id])
         self.ae(st.remove_window(3), 1)
         self.ae(len(st), 0)
+
+    def test_annotation_persistence(self):
+        old_store, old_loaded = annotations_module._store, annotations_module._store_loaded
+        try:
+            with tempfile.TemporaryDirectory() as tdir:
+                path = os.path.join(tdir, 'annotations.json')
+                annotations_module._store = AnnotationStore()
+                annotations_module._store_loaded = True
+                annotations_module._store.add(Annotation('saved text', 'saved note'))
+                with patch('kitty.annotations.annotation_storage_path', return_value=path):
+                    annotations_module.save_annotations()
+                    annotations_module._store = None
+                    annotations_module._store_loaded = False
+                    loaded = annotations_module.annotation_store()
+                self.ae([(a.text, a.note) for a in loaded], [('saved text', 'saved note')])
+        finally:
+            annotations_module._store, annotations_module._store_loaded = old_store, old_loaded
 
     def test_annotation_highlight_coexists_with_user_marker(self):
         s = self.create_screen()

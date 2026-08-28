@@ -8,6 +8,9 @@ kitty window. Annotations live for as long as the tab that contains them, they
 are not persisted to disk.
 """
 
+import json
+import os
+import tempfile
 import time
 from collections.abc import Iterable, Iterator, Sequence
 from typing import Any, NamedTuple
@@ -177,19 +180,59 @@ def format_annotations(annotations: Sequence[Annotation], fmt: str = 'markdown')
 
 
 _store: AnnotationStore | None = None
+_store_loaded = False
 
 
 def annotation_store() -> AnnotationStore:
     'The global, in-memory store of annotations for this kitty instance'
-    global _store
+    global _store, _store_loaded
     if _store is None:
         _store = AnnotationStore()
+    if not _store_loaded:
+        _store_loaded = True
+        path = annotation_storage_path()
+        if path:
+            try:
+                with open(path) as f:
+                    for item in json.load(f):
+                        _store.add(Annotation.from_dict(item))
+            except (OSError, ValueError, TypeError):
+                pass
     return _store
+
+
+def annotation_storage_path() -> str:
+    from .fast_data_types import get_options
+
+    path = get_options().annotation_storage
+    return '' if not path or path.lower() == 'none' else os.path.abspath(os.path.expanduser(os.path.expandvars(path)))
+
+
+def save_annotations() -> None:
+    path = annotation_storage_path()
+    if not path or _store is None:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix='.kitty-annotations-', dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd, 'w') as f:
+            json.dump([a.as_dict() for a in _store], f, ensure_ascii=False, indent=2)
+            f.write('\n')
+        os.replace(temporary, path)
+    finally:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
 
 
 def refresh_annotation_markers(boss: Any) -> None:
     'Refresh the independent marker used to keep annotated source text visible.'
     from .fast_data_types import set_uint_at_address, truncate_point_for_length
+    from .fast_data_types import get_options
+
+    highlight_mark = max(1, min(3, get_options().annotation_highlight))
+    save_annotations()
 
     by_window: dict[int, list[Annotation]] = {}
     for annotation in annotation_store():
@@ -214,7 +257,7 @@ def refresh_annotation_markers(boss: Any) -> None:
                     ranges.setdefault(last, []).append((0, loc.end_x, ''))
 
             def marker(text: str, left_address: int, right_address: int, color_address: int, line_number: int) -> Any:
-                set_uint_at_address(color_address, 3)
+                set_uint_at_address(color_address, highlight_mark)
                 for start_x, end_x, fallback_text in ranges.get(line_number, ()):
                     left = truncate_point_for_length(text, start_x) if start_x else 0
                     right = len(text) - 1 if end_x < 0 else truncate_point_for_length(text, end_x) - 1
@@ -230,3 +273,5 @@ def refresh_annotation_markers(boss: Any) -> None:
             window.screen.set_annotation_marker(marker)
         else:
             window.screen.set_annotation_marker()
+    for tab_manager in boss.os_window_map.values():
+        tab_manager.update_tab_bar_data()

@@ -55,6 +55,8 @@ option_names = (
     'allow_cloning',
     'allow_hyperlinks',
     'allow_remote_control',
+    'annotation_highlight',
+    'annotation_storage',
     'auto_reload_config',
     'background',
     'background_blur',
@@ -537,6 +539,8 @@ class Options:
     allow_cloning: choices_for_allow_cloning = 'ask'
     allow_hyperlinks: int = 1
     allow_remote_control: choices_for_allow_remote_control = 'no'
+    annotation_highlight: int = 3
+    annotation_storage: str = 'none'
     auto_reload_config: float = 0.1
     background: Color = Color(0, 0, 0)
     background_blur: int = 0
