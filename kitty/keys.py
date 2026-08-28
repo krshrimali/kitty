@@ -167,7 +167,7 @@ class Mappings:
             action = parts[0]
             actions.append(action)
             label = _annotation_sequence_labels.get(definition, action.replace('_', ' ').capitalize())
-            entries.append((human_repr_of_single_key(key, self.get_options().kitty_mod).upper(), label))
+            entries.append((human_repr_of_single_key(key, self.get_options().kitty_mod), label))
         entries.sort()
         if entries:
             title = _('Annotations') if all(action in _annotation_sequence_actions for action in actions) else _('Shortcuts')
