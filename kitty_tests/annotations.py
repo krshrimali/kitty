@@ -2,6 +2,7 @@
 # License: GPL v3 Copyright: 2026, Kovid Goyal <kovid at kovidgoyal.net>
 
 from functools import partial
+import json
 import os
 import tempfile
 from unittest.mock import patch
@@ -171,12 +172,13 @@ class TestAnnotations(BaseTest):
         self.ae(len(st), 0)
 
     def test_annotation_persistence(self):
-        old_store, old_loaded = annotations_module._store, annotations_module._store_loaded
+        old_store, old_loaded, old_known = annotations_module._store, annotations_module._store_loaded, annotations_module._known_persisted_ids
         try:
             with tempfile.TemporaryDirectory() as tdir:
                 path = os.path.join(tdir, 'annotations.json')
                 annotations_module._store = AnnotationStore()
                 annotations_module._store_loaded = True
+                annotations_module._known_persisted_ids = set()
                 annotations_module._store.add(Annotation('saved text', 'saved note'))
                 with patch('kitty.annotations.annotation_storage_path', return_value=path):
                     annotations_module.save_annotations()
@@ -186,6 +188,29 @@ class TestAnnotations(BaseTest):
                 self.ae([(a.text, a.note) for a in loaded], [('saved text', 'saved note')])
         finally:
             annotations_module._store, annotations_module._store_loaded = old_store, old_loaded
+            annotations_module._known_persisted_ids = old_known
+
+    def test_annotation_persistence_merges_other_instances(self):
+        old_store, old_loaded, old_known = annotations_module._store, annotations_module._store_loaded, annotations_module._known_persisted_ids
+        try:
+            with tempfile.TemporaryDirectory() as tdir:
+                path = os.path.join(tdir, 'annotations.json')
+                base, remote, local = Annotation('base'), Annotation('remote'), Annotation('local')
+                with open(path, 'w') as f:
+                    json.dump([base.as_dict(), remote.as_dict()], f)
+                annotations_module._store = AnnotationStore()
+                annotations_module._store.add(base)
+                annotations_module._store.add(local)
+                annotations_module._store_loaded = True
+                annotations_module._known_persisted_ids = {base.id}
+                with patch('kitty.annotations.annotation_storage_path', return_value=path):
+                    annotations_module.save_annotations()
+                with open(path) as f:
+                    saved_ids = {item['id'] for item in json.load(f)}
+                self.ae(saved_ids, {base.id, remote.id, local.id})
+        finally:
+            annotations_module._store, annotations_module._store_loaded = old_store, old_loaded
+            annotations_module._known_persisted_ids = old_known
 
     def test_annotation_highlight_coexists_with_user_marker(self):
         s = self.create_screen()

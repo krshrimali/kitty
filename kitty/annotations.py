@@ -8,6 +8,7 @@ kitty window. Annotations live for as long as the tab that contains them, they
 are not persisted to disk.
 """
 
+import fcntl
 import json
 import os
 import tempfile
@@ -184,11 +185,12 @@ def format_annotations(annotations: Sequence[Annotation], fmt: str = 'markdown')
 
 _store: AnnotationStore | None = None
 _store_loaded = False
+_known_persisted_ids: set[str] = set()
 
 
 def annotation_store() -> AnnotationStore:
     'The global, in-memory store of annotations for this kitty instance'
-    global _store, _store_loaded
+    global _store, _store_loaded, _known_persisted_ids
     if _store is None:
         _store = AnnotationStore()
     if not _store_loaded:
@@ -201,6 +203,7 @@ def annotation_store() -> AnnotationStore:
                         annotation = Annotation.from_dict(item)
                         annotation.location = annotation.location._replace(tab_id=0, window_id=0)
                         _store.add(annotation)
+                        _known_persisted_ids.add(annotation.id)
             except (OSError, ValueError, TypeError):
                 pass
     return _store
@@ -214,21 +217,39 @@ def annotation_storage_path() -> str:
 
 
 def save_annotations() -> None:
+    global _known_persisted_ids
     path = annotation_storage_path()
     if not path or _store is None:
         return
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    fd, temporary = tempfile.mkstemp(prefix='.kitty-annotations-', dir=os.path.dirname(path))
-    try:
-        with os.fdopen(fd, 'w') as f:
-            json.dump([a.as_dict() for a in _store], f, ensure_ascii=False, indent=2)
-            f.write('\n')
-        os.replace(temporary, path)
-    finally:
+    with open(path + '.lock', 'a+') as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
         try:
-            os.unlink(temporary)
-        except FileNotFoundError:
-            pass
+            with open(path) as f:
+                disk_items = json.load(f)
+        except (OSError, ValueError, TypeError):
+            disk_items = []
+        disk_by_id = {item.get('id'): item for item in disk_items if isinstance(item, dict) and item.get('id')}
+        current_by_id = {a.id: a for a in _store}
+        merged: dict[str, dict[str, Any]] = {}
+        for annotation_id, item in disk_by_id.items():
+            if annotation_id not in _known_persisted_ids or annotation_id in current_by_id:
+                merged[annotation_id] = item
+        for annotation_id, annotation in current_by_id.items():
+            if annotation_id not in _known_persisted_ids or annotation_id in disk_by_id:
+                merged[annotation_id] = annotation.as_dict()
+        fd, temporary = tempfile.mkstemp(prefix='.kitty-annotations-', dir=os.path.dirname(path))
+        try:
+            with os.fdopen(fd, 'w') as f:
+                json.dump(list(merged.values()), f, ensure_ascii=False, indent=2)
+                f.write('\n')
+            os.replace(temporary, path)
+            _known_persisted_ids = set(merged)
+        finally:
+            try:
+                os.unlink(temporary)
+            except FileNotFoundError:
+                pass
 
 
 def marker_for_ranges(ranges: dict[int, list[tuple[int, int, str]]], highlight_mark: int) -> Any:
