@@ -52,6 +52,9 @@ Key                         Action
 :kbd:`Tab`                  Switch focus between the list and preview in wide terminals
 :kbd:`/`                    Search annotated text, notes and source information
 :kbd:`?`                    Show the keyboard help overlay
+:kbd:`f`                    Switch the export format between Markdown and plain text
+:kbd:`o`                    Cycle sorting by creation order, window and source line
+:kbd:`s`                    Save the selected annotations to a new file
 :kbd:`space`                Tick or untick the current annotation
 :kbd:`a`                    Tick all annotations, or untick them all if any are ticked
 :kbd:`e`                    Edit the note of the current annotation in your editor
@@ -70,7 +73,7 @@ scrolls to the annotated line.
 
 The panel also supports the mouse. Use the wheel to move through annotations,
 click an entry to make it current, and click the current entry again to tick or
-untick it.
+untick it. The action labels along the bottom of the panel are clickable.
 
 The selected occurrence of annotated text remains highlighted in its source
 window, including in scrollback, for as long as the annotation exists. Other
@@ -145,6 +148,18 @@ scrollback is cleared.
 
 Configuration
 ----------------
+
+Use a different configured mark color for persistent highlights::
+
+    annotation_highlight 2
+
+To preserve annotations across restarts, set a JSON storage path::
+
+    annotation_storage ~/.local/state/kitty/annotations.json
+
+This is disabled by default because annotated terminal output can contain
+passwords, tokens or other sensitive information. Persisted annotations whose
+original tabs no longer exist remain available in the ``all`` scope.
 
 The default shortcuts all start with :kbd:`ctrl+shift+m`:
 
