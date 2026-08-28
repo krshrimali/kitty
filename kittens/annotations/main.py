@@ -454,6 +454,7 @@ class ListHandler(Handler):
             for line in wrap_text(self.note_for(cur) or '(no note)', right_width):
                 detail.append((line, wcswidth(line)))
         available = max(3, rows - 7)
+        detail_total = len(detail)
         if self.focus == 'detail':
             detail = detail[self.detail_offset :]
         start, shown = self.visible_annotations(available // 2)
@@ -474,8 +475,10 @@ class ListHandler(Handler):
             rc, rw = detail[n] if n < len(detail) else ('', 0)
             thumb = round(self.idx / max(1, len(self.displayed) - 1) * max(0, body_rows - 1))
             bar = accent('█') if n == thumb else dim('│')
-            content = lc + ' ' * max(0, left_width - lw - 1) + bar + dim(' │ ') + rc
-            lines.append(f.row(content, left_width + 3 + rw))
+            detail_thumb = round(self.detail_offset / max(1, detail_total - available) * max(0, body_rows - 1))
+            detail_bar = accent('█') if n == detail_thumb else dim('│')
+            content = lc + ' ' * max(0, left_width - lw - 1) + bar + dim(' │ ') + rc + ' ' * max(0, right_width - rw - 1) + detail_bar
+            lines.append(f.row(content, f.inner))
 
     def finalize(self) -> None:
         self.cmd.set_cursor_visible(True)
@@ -672,7 +675,9 @@ class ListHandler(Handler):
             self.focus = 'detail' if self.focus == 'list' else 'list'
             self.message = f'{self.focus.capitalize()} focused'
         elif (key_event.matches('j') or key_event.matches('down') or key_event.matches('ctrl+n')) and self.focus == 'detail':
-            self.detail_offset += 1
+            cur = self.current
+            detail_lines = len((cur or {}).get('text', '').splitlines()) + len(self.note_for(cur).splitlines()) + 4 if cur else 0
+            self.detail_offset = min(self.detail_offset + 1, max(0, detail_lines - 1))
         elif (key_event.matches('k') or key_event.matches('up') or key_event.matches('ctrl+p')) and self.focus == 'detail':
             self.detail_offset = max(0, self.detail_offset - 1)
         elif key_event.matches('j') or key_event.matches('down') or key_event.matches('ctrl+n'):
