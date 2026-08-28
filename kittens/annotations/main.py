@@ -96,6 +96,12 @@ def single_line_view(text: str, cursor: int, width: int) -> tuple[str, int]:
     return visible, cursor - wcswidth(text[:start])
 
 
+def scrollbar_thumb(position: int, maximum: int, track_size: int) -> int:
+    if track_size < 2 or maximum < 1:
+        return 0
+    return round(max(0, min(position, maximum)) / maximum * (track_size - 1))
+
+
 class Frame:
     'A rounded box that floats with some space around it, rather than filling the window'
 
@@ -473,9 +479,11 @@ class ListHandler(Handler):
                 self.entry_rows[len(lines)] = start + n // 2
             lc, lw = list_rows[n] if n < len(list_rows) else ('', 0)
             rc, rw = detail[n] if n < len(detail) else ('', 0)
-            thumb = round(self.idx / max(1, len(self.displayed) - 1) * max(0, body_rows - 1))
+            thumb = scrollbar_thumb(self.idx, len(self.displayed) - 1, body_rows)
             bar = accent('█') if n == thumb else dim('│')
-            detail_thumb = round(self.detail_offset / max(1, detail_total - available) * max(0, body_rows - 1))
+            max_detail_offset = max(0, detail_total - available)
+            self.detail_offset = min(self.detail_offset, max_detail_offset)
+            detail_thumb = scrollbar_thumb(self.detail_offset, max_detail_offset, body_rows)
             detail_bar = accent('█') if n == detail_thumb else dim('│')
             content = lc + ' ' * max(0, left_width - lw - 1) + bar + dim(' │ ') + rc + ' ' * max(0, right_width - rw - 1) + detail_bar
             lines.append(f.row(content, f.inner))
@@ -515,7 +523,7 @@ class ListHandler(Handler):
             head, width_used = self.list_entry(i, a, f.inner)
             self.entry_rows[len(lines)] = i
             self.entry_rows[len(lines) + 1] = i
-            thumb = round((self.idx - start) / max(1, len(shown) - 1) * max(0, len(shown) * 2 - 1))
+            thumb = scrollbar_thumb(self.idx - start, len(shown) - 1, len(shown) * 2)
             row_number = (i - start) * 2
             bar = accent('█') if row_number <= thumb <= row_number + 1 else dim('│')
             lines.append(f.row(head + ' ' * max(0, f.inner - width_used - 1) + bar, f.inner))

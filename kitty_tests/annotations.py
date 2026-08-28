@@ -6,7 +6,7 @@ import os
 import tempfile
 from unittest.mock import patch
 
-from kittens.annotations.main import Frame, ListHandler, key_event_for_char, single_line_view, truncate_to_width, visible_window, wrap_text
+from kittens.annotations.main import Frame, ListHandler, key_event_for_char, scrollbar_thumb, single_line_view, truncate_to_width, visible_window, wrap_text
 from kittens.tui.loop import EventType, MouseButton, MouseEvent
 from kitty.annotations import Annotation, AnnotationStore, Location, format_annotations, highlight_ranges_for_location, marker_for_ranges
 from kitty import annotations as annotations_module
@@ -46,6 +46,8 @@ class TestAnnotations(BaseTest):
         self.ae(truncate_to_width('annotation🙂text', 8), 'annotat…')
         self.assertTrue(all(len(line) > 0 for line in wrap_text('one two three four', 7)))
         self.ae(single_line_view('0123456789', 10, 5), ('6789', 4))
+        self.ae(scrollbar_thumb(500, 100, 8), 7)
+        self.ae(scrollbar_thumb(-10, 100, 8), 0)
 
     def test_annotation_tui_search_delete_and_editor_failure(self):
         anns = [
