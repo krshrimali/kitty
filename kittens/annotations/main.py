@@ -84,6 +84,18 @@ def visible_window(total: int, current: int, count: int) -> tuple[int, int]:
     return start, min(total, start + count)
 
 
+def single_line_view(text: str, cursor: int, width: int) -> tuple[str, int]:
+    'Return a horizontally scrolled single-line view and cursor column.'
+    width = max(1, width)
+    cursor = max(0, min(cursor, wcswidth(text)))
+    start_col = max(0, cursor - width + 1)
+    start = truncate_point_for_length(text, start_col) if start_col else 0
+    visible = text[start:]
+    end = truncate_point_for_length(visible, width)
+    visible = visible[:end]
+    return visible, cursor - wcswidth(text[:start])
+
+
 class Frame:
     'A rounded box that floats with some space around it, rather than filling the window'
 
@@ -234,15 +246,20 @@ class AddHandler(Handler):
             actions = f'{key_hint("Enter", "Save")}  {key_hint("Ctrl+E", "Edit")}  {key_hint("Esc", "Cancel")}'
             lines.append(f.text(truncate_to_width(actions, f.width)))
         else:
-            lines.append(f.row('', 0))
+            prompt = 'note> '
+            view, cursor_col = single_line_view(self.line_edit.current_input, self.line_edit.cursor_pos, max(1, f.inner - len(prompt)))
+            input_row = len(lines)
+            lines.append(f.row(accent(prompt) + view, len(prompt) + wcswidth(view)))
             lines.append(f.bottom())
             actions = f'{key_hint("Enter", "Save")}  {key_hint("Ctrl+E", "Editor")}  {key_hint("Esc", "Cancel")}'
             lines.append(f.text(truncate_to_width(actions, f.width)))
-        self.write('\r\n'.join(lines[: sz.rows]))
+        rendered = lines[: sz.rows]
+        self.write('\r\n'.join(rendered))
         if not self.multiline_note:
-            # Move back into the empty input row drawn immediately above the lower border.
-            self.write('\x1b[2A\r')
-            self.line_edit.write(self.write, f.pad + dim(VERTICAL) + ' ' + accent('note> '))
+            if input_row < len(rendered):
+                up = len(rendered) - 1 - input_row
+                self.write((f'\x1b[{up}A' if up else '') + '\r')
+                self.write(f'\x1b[{f.margin + 2 + len(prompt) + cursor_col}C')
 
     def handle_special_key(self, key_event: KeyEvent) -> bool:
         if key_event.matches('esc'):

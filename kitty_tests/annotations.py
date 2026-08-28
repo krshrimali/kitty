@@ -4,7 +4,7 @@
 from functools import partial
 from unittest.mock import patch
 
-from kittens.annotations.main import Frame, ListHandler, key_event_for_char, truncate_to_width, visible_window, wrap_text
+from kittens.annotations.main import Frame, ListHandler, key_event_for_char, single_line_view, truncate_to_width, visible_window, wrap_text
 from kittens.tui.loop import EventType, MouseButton, MouseEvent
 from kitty.annotations import Annotation, AnnotationStore, Location, format_annotations
 from kitty.fast_data_types import GLFW_MOUSE_BUTTON_LEFT, create_mock_window, mock_mouse_selection, send_mock_mouse_event_to_window
@@ -29,6 +29,7 @@ class TestAnnotations(BaseTest):
         self.ae(visible_window(3, 2, 20), (0, 3))
         self.ae(truncate_to_width('annotation🙂text', 8), 'annotat…')
         self.assertTrue(all(len(line) > 0 for line in wrap_text('one two three four', 7)))
+        self.ae(single_line_view('0123456789', 10, 5), ('6789', 4))
 
     def test_annotation_tui_search_delete_and_editor_failure(self):
         anns = [
