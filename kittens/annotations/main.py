@@ -102,6 +102,22 @@ def scrollbar_thumb(position: int, maximum: int, track_size: int) -> int:
     return round(max(0, min(position, maximum)) / maximum * (track_size - 1))
 
 
+def action_footer(width: int) -> tuple[str, list[tuple[int, int, str]]]:
+    actions = (('Edit', 'e'), ('Delete', 'd'), ('Copy', 'y'), ('Save', 's'), ('Format', 'f'), ('Sort', 'o'), ('Jump', 'enter'), ('Undo', 'u'), ('Search', '/'), ('Help', '?'), ('Quit', 'q'))
+    parts: list[str] = []
+    spans: list[tuple[int, int, str]] = []
+    pos = 0
+    for label, key in actions:
+        separator = '  ' if parts else ''
+        if pos + len(separator) + len(label) > width:
+            break
+        parts.append(separator + label)
+        pos += len(separator)
+        spans.append((pos, pos + len(label), key))
+        pos += len(label)
+    return ''.join(parts), spans
+
+
 class Frame:
     'A rounded box that floats with some space around it, rather than filling the window'
 
@@ -560,14 +576,15 @@ class ListHandler(Handler):
             )
             lines = lines[: max(0, sz.rows - len(help_lines) - 2)]
             lines.extend(('', f.rule('Keyboard help'), *(f.text(x) for x in help_lines)))
-        footer = self.message or ('save as> ' + self.save_path if self.saving else ('search> ' + self.query if self.searching else 'Edit Delete Copy Save Format Sort Jump Undo Search Help Quit'))
+        default_footer, action_spans = action_footer(f.width)
+        footer = self.message or ('save as> ' + self.save_path if self.saving else ('search> ' + self.query if self.searching else default_footer))
         if not self.message and not self.searching and not self.saving:
             action_row = len(lines)
-            action_x = f.margin
-            for label, key in (('Edit', 'e'), ('Delete', 'd'), ('Copy', 'y'), ('Save', 's'), ('Format', 'f'), ('Sort', 'o'), ('Jump', 'enter'), ('Undo', 'u'), ('Search', '/'), ('Help', '?'), ('Quit', 'q')):
-                for x in range(action_x, action_x + len(label)):
+            for start_x, end_x, key in action_spans:
+                for x in range(f.margin + start_x, f.margin + end_x):
                     self.action_cells[action_row, x] = key
-                action_x += len(label) + 2
+            if action_row >= sz.rows:
+                self.action_cells.clear()
         lines.append(f.text(styled(truncate_to_width(footer, f.width), fg='yellow') if self.message else dim(truncate_to_width(footer, f.width))))
         self.write('\r\n'.join(lines[: sz.rows]))
 
