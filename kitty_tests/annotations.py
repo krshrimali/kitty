@@ -152,7 +152,14 @@ class TestAnnotations(BaseTest):
         s = self.create_screen()
         s.draw('alpha beta')
         s.set_marker(marker_from_text('alpha', 1))
-        s.set_annotation_marker(marker_from_text('beta', 3))
+        base_marker = marker_from_text('beta', 3)
+
+        def annotation_marker(text, left, right, color, line_number):
+            if line_number == 2:
+                yield from base_marker(text, left, right, color)
+
+        s.set_annotation_marker(annotation_marker)
+        s.draw('\nbeta')
         marks = s.marked_cells()
         self.ae(sum(mark == 1 for _x, _y, mark in marks), 5)
         self.ae(sum(mark == 3 for _x, _y, mark in marks), 4)

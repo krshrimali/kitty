@@ -2655,8 +2655,12 @@ class Window:
             # lines in the scrollback, convert to 1-based line numbers counted
             # from the start of the scrollback
             offset = self.screen.historybuf.count + 1
-            ys = [b['start_y'] for b in bounds] + [b['end_y'] for b in bounds]
-            start_line, end_line = offset + min(ys), offset + max(ys)
+            starts = sorted(((b['start_y'], b['start_x']) for b in bounds))
+            ends = sorted(((b['end_y'], b['end_x']) for b in bounds))
+            start_y, start_x = starts[0]
+            end_y, end_x = ends[-1]
+            start_line, end_line = offset + start_y, offset + end_y
+            return text, self.annotation_location(start_line, end_line)._replace(start_x=start_x, end_x=end_x)
         return text, self.annotation_location(start_line, end_line)
 
     @ac(

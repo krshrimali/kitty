@@ -72,8 +72,9 @@ The panel also supports the mouse. Use the wheel to move through annotations,
 click an entry to make it current, and click the current entry again to tick or
 untick it.
 
-Annotated text remains highlighted in its source window, including in
-scrollback, for as long as the annotation exists. Annotation highlights use a
+The selected occurrence of annotated text remains highlighted in its source
+window, including in scrollback, for as long as the annotation exists. Other
+occurrences of the same text are not highlighted. Annotation highlights use a
 separate marker layer, so they do not replace markers configured with
 :ac:`toggle_marker`.
 

@@ -8,7 +8,6 @@ kitty window. Annotations live for as long as the tab that contains them, they
 are not persisted to disk.
 """
 
-import re
 import time
 from collections.abc import Iterable, Iterator, Sequence
 from typing import Any, NamedTuple
@@ -25,6 +24,8 @@ class Location(NamedTuple):
     window_title: str = ''
     start_line: int = 0  # 1-based line number counted from the top of the scrollback, 0 means unknown
     end_line: int = 0
+    start_x: int = 0
+    end_x: int = 0
     cwd: str = ''
     label: str = ''  # description of the text when it did not come from a selection
 
@@ -186,17 +187,42 @@ def annotation_store() -> AnnotationStore:
 
 def refresh_annotation_markers(boss: Any) -> None:
     'Refresh the independent marker used to keep annotated source text visible.'
-    from .marks import marker_from_regex
+    from .fast_data_types import set_uint_at_address
 
-    by_window: dict[int, set[str]] = {}
+    by_window: dict[int, list[Annotation]] = {}
     for annotation in annotation_store():
         if annotation.location.window_id:
-            lines = by_window.setdefault(annotation.location.window_id, set())
-            lines.update(line for line in annotation.text.splitlines() if line)
+            by_window.setdefault(annotation.location.window_id, []).append(annotation)
     for window_id, window in boss.window_id_map.items():
-        snippets = by_window.get(window_id)
-        if snippets:
-            expression = '|'.join(re.escape(x) for x in sorted(snippets, key=len, reverse=True))
-            window.screen.set_annotation_marker(marker_from_regex(expression, 3))
+        annotations = by_window.get(window_id)
+        if annotations:
+            ranges: dict[int, list[tuple[str, int]]] = {}
+            for annotation in annotations:
+                loc = annotation.location
+                if not loc.start_line:
+                    continue
+                pieces = annotation.text.splitlines() or ['']
+                for offset, piece in enumerate(pieces):
+                    line_number = loc.start_line + offset
+                    expected_x = loc.start_x if offset == 0 else 0
+                    ranges.setdefault(line_number, []).append((piece, expected_x))
+
+            def marker(text: str, left_address: int, right_address: int, color_address: int, line_number: int) -> Any:
+                set_uint_at_address(color_address, 3)
+                for piece, expected_x in ranges.get(line_number, ()):
+                    if not piece:
+                        continue
+                    starts: list[int] = []
+                    pos = text.find(piece)
+                    while pos > -1:
+                        starts.append(pos)
+                        pos = text.find(piece, pos + 1)
+                    if starts:
+                        left = min(starts, key=lambda x: abs(x - expected_x))
+                        set_uint_at_address(left_address, left)
+                        set_uint_at_address(right_address, left + len(piece) - 1)
+                        yield
+
+            window.screen.set_annotation_marker(marker)
         else:
             window.screen.set_annotation_marker()

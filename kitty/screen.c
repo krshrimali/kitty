@@ -3944,9 +3944,9 @@ screen_has_any_marker(Screen *self) {
 }
 
 static void
-apply_screen_markers(Screen *self, Line *line) {
+apply_screen_markers(Screen *self, Line *line, unsigned long line_number) {
     mark_text_in_line(self->marker, line, &self->as_ansi_buf);
-    add_marks_to_line(self->annotation_marker, line, &self->as_ansi_buf);
+    add_marks_to_line(self->annotation_marker, line, &self->as_ansi_buf, line_number);
 }
 
 static uint32_t
@@ -4080,7 +4080,7 @@ screen_update_cell_data(Screen *self, void *address, FONTS_DATA_HANDLE fonts_dat
                 if (linebuf->line->attrs.has_dirty_text) {
                     render_line(fonts_data, linebuf->line, y, &self->paused_rendering.cursor, self->disable_ligatures, self->lc);
                     screen_render_line_graphics(self, linebuf->line, y);
-                    if (linebuf->line->attrs.has_dirty_text && screen_has_any_marker(self)) apply_screen_markers(self, linebuf->line);
+                    if (linebuf->line->attrs.has_dirty_text && screen_has_any_marker(self)) apply_screen_markers(self, linebuf->line, y + 1);
                     linebuf_mark_line_clean(linebuf, y);
                 }
                 update_line_data(linebuf->line, y, address);
@@ -4113,14 +4113,14 @@ screen_update_cell_data(Screen *self, void *address, FONTS_DATA_HANDLE fonts_dat
             screen_render_line_graphics(self, linep, virtual_y - (int)self->scrolled_by);
             if (force_history_render || linep->attrs.has_dirty_text) {
                 render_line(fonts_data, linep, lnum, self->cursor, self->disable_ligatures, self->lc);
-                if (screen_has_any_marker(self)) apply_screen_markers(self, linep);
+                if (screen_has_any_marker(self)) apply_screen_markers(self, linep, self->historybuf->count - lnum);
                 historybuf_mark_line_clean(self->historybuf, lnum);
             }
         } else {
             if (linep->attrs.has_dirty_text || (cursor_has_moved && (self->cursor->y == lnum || self->last_rendered.cursor.y == lnum))) {
                 render_line(fonts_data, linep, lnum, self->cursor, self->disable_ligatures, self->lc);
                 screen_render_line_graphics(self, linep, virtual_y - (int)self->scrolled_by);
-                if (linep->attrs.has_dirty_text && screen_has_any_marker(self)) apply_screen_markers(self, linep);
+                if (linep->attrs.has_dirty_text && screen_has_any_marker(self)) apply_screen_markers(self, linep, self->historybuf->count + lnum + 1);
                 if (is_overlay_active && lnum == self->overlay_line.ynum) render_overlay_line(self, linep, fonts_data);
                 linebuf_mark_line_clean(self->linebuf, lnum);
             }
@@ -6535,15 +6535,15 @@ static void
 screen_mark_all(Screen *self) {
     for (index_type y = 0; y < self->main_linebuf->ynum; y++) {
         linebuf_init_line(self->main_linebuf, y);
-        apply_screen_markers(self, self->main_linebuf->line);
+        apply_screen_markers(self, self->main_linebuf->line, self->historybuf->count + y + 1);
     }
     for (index_type y = 0; y < self->alt_linebuf->ynum; y++) {
         linebuf_init_line(self->alt_linebuf, y);
-        apply_screen_markers(self, self->alt_linebuf->line);
+        apply_screen_markers(self, self->alt_linebuf->line, y + 1);
     }
     for (index_type y = 0; y < self->historybuf->count; y++) {
         historybuf_init_line(self->historybuf, y, self->historybuf->line);
-        apply_screen_markers(self, self->historybuf->line);
+        apply_screen_markers(self, self->historybuf->line, self->historybuf->count - y);
     }
     self->is_dirty = true;
 }
