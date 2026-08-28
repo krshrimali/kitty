@@ -1097,7 +1097,13 @@ class Window:
             render_bottom = new_geometry.bottom
 
         if self.needs_layout or new_geometry.xnum != self.screen.columns or render_ynum != self.screen.lines:
+            columns_changed = new_geometry.xnum != self.screen.columns
             self.screen.resize(max(0, render_ynum), max(0, new_geometry.xnum))
+            if columns_changed:
+                from .annotations import reanchor_annotations_for_window, refresh_annotation_markers
+
+                if reanchor_annotations_for_window(self):
+                    refresh_annotation_markers(get_boss())
             self.needs_layout = False
             call_watchers(weakref.ref(self), 'on_resize', {'old_geometry': self.geometry, 'new_geometry': new_geometry})
         current_pty_size = (self.screen.lines, self.screen.columns, max(0, new_geometry.right - new_geometry.left), max(0, render_bottom - render_top))

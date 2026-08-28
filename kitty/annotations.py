@@ -313,6 +313,67 @@ def highlight_ranges_for_location(loc: Location, fallback_text: str = '') -> dic
     return ans
 
 
+def reanchor_location_after_reflow(loc: Location, selected_text: str, physical_lines: list[tuple[int, str, bool]]) -> Location:
+    'Find the same selected text after terminal lines have been rewrapped.'
+    from .fast_data_types import wcswidth
+
+    if not selected_text or len(loc.ranges) > 1 or (loc.ranges and loc.ranges[0][4]):
+        return loc
+    chunks: list[str] = []
+    positions: list[tuple[int, int] | None] = []
+    for i, (line_id, text, continued) in enumerate(physical_lines):
+        if i and not continued:
+            chunks.append('\n')
+            positions.append(None)
+        chunks.append(text)
+        positions.extend((line_id, col) for col in range(len(text)))
+    haystack = ''.join(chunks)
+    candidates: list[int] = []
+    pos = haystack.find(selected_text)
+    while pos > -1:
+        if pos < len(positions) and positions[pos] is not None and pos + len(selected_text) - 1 < len(positions):
+            candidates.append(pos)
+        pos = haystack.find(selected_text, pos + 1)
+    if not candidates:
+        return loc
+    expected_line = loc.start_line_id or loc.start_line
+    expected_x = loc.start_x
+
+    def distance(offset: int) -> tuple[int, int]:
+        anchor = positions[offset]
+        assert anchor is not None
+        return abs(anchor[0] - expected_line), abs(anchor[1] - expected_x)
+
+    start_offset = min(candidates, key=distance)
+    end_offset = start_offset + len(selected_text) - 1
+    while end_offset > start_offset and positions[end_offset] is None:
+        end_offset -= 1
+    start = positions[start_offset]
+    end = positions[end_offset]
+    if start is None or end is None:
+        return loc
+    first_id, first_col = start
+    last_id, last_col = end
+    line_text = {line_id: text for line_id, text, continued in physical_lines}
+    first_x = wcswidth(line_text[first_id][:first_col])
+    last_x = wcswidth(line_text[last_id][: last_col + 1])
+    new_range = (first_id, last_id, first_x, last_x, False)
+    return loc._replace(start_line_id=first_id, end_line_id=last_id, start_x=first_x, end_x=last_x, ranges=(new_range,))
+
+
+def reanchor_annotations_for_window(window: Any) -> bool:
+    if _store is None:
+        return False
+    physical_lines = window.screen.physical_lines()
+    changed = False
+    for annotation in _store.for_window(window.id):
+        location = reanchor_location_after_reflow(annotation.location, annotation.text, physical_lines)
+        if location != annotation.location:
+            annotation.location = location
+            changed = True
+    return changed
+
+
 def refresh_annotation_markers(boss: Any) -> None:
     'Refresh the independent marker used to keep annotated source text visible.'
     from .fast_data_types import get_options

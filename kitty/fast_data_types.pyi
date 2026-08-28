@@ -1143,6 +1143,9 @@ class Screen:
     def selection_bounds(self) -> Tuple[Dict[str, Any], ...]:
         pass
 
+    def physical_lines(self) -> List[Tuple[int, str, bool]]:
+        pass
+
     def text_for_selection(self, ansi: bool, strip_trailing_spaces: bool) -> Tuple[str, ...]:
         pass
 

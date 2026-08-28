@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from kittens.annotations.main import Frame, ListHandler, action_footer, key_event_for_char, scrollbar_thumb, single_line_view, truncate_to_width, visible_window, wrap_text
 from kittens.tui.loop import EventType, MouseButton, MouseEvent
-from kitty.annotations import Annotation, AnnotationStore, Location, format_annotations, highlight_ranges_for_location, marker_for_ranges
+from kitty.annotations import Annotation, AnnotationStore, Location, format_annotations, highlight_ranges_for_location, marker_for_ranges, reanchor_location_after_reflow
 from kitty import annotations as annotations_module
 from kitty.fast_data_types import GLFW_MOUSE_BUTTON_LEFT, create_mock_window, mock_mouse_selection, send_mock_mouse_event_to_window
 from kitty.key_encoding import KeyEvent, parse_shortcut
@@ -38,6 +38,12 @@ class TestAnnotations(BaseTest):
             highlight_ranges_for_location(loc),
             {10: [(2, 5, '')], 11: [(2, 5, '')], 12: [(2, 5, '')], 20: [(7, 9, '')]},
         )
+
+    def test_annotation_range_reanchors_after_reflow(self):
+        loc = Location(start_line_id=2, end_line_id=2, start_x=0, end_x=6, ranges=((2, 2, 0, 6, False),))
+        lines = [(1, 'other', False), (3, 'prefix target suffix', False), (8, 'target', False)]
+        moved = reanchor_location_after_reflow(loc, 'target', lines)
+        self.ae(moved.ranges, ((3, 3, 7, 13, False),))
 
     def test_annotation_tui_layout_helpers(self):
         self.ae(Frame(40).margin, 0)

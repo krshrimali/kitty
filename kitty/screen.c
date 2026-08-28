@@ -5703,6 +5703,28 @@ selection_bounds(Screen *self, PyObject *a UNUSED) {
 }
 
 static PyObject *
+physical_lines(Screen *self, PyObject *a UNUSED) {
+    RAII_PyObject(ans, PyList_New(0));
+    if (!ans) return NULL;
+    for (index_type y = self->historybuf->count; y > 0; y--) {
+        const index_type idx = y - 1;
+        historybuf_init_line(self->historybuf, idx, self->historybuf->line);
+        PyObject *text = line_as_unicode(self->historybuf->line, false, &self->as_ansi_buf);
+        if (!text) return NULL;
+        RAII_PyObject(item, Py_BuildValue("(KNp)", self->total_history_line_count - idx, text, historybuf_is_line_continued(self->historybuf, idx)));
+        if (!item || PyList_Append(ans, item) != 0) return NULL;
+    }
+    for (index_type y = 0; y < self->main_linebuf->ynum; y++) {
+        linebuf_init_line(self->main_linebuf, y);
+        PyObject *text = line_as_unicode(self->main_linebuf->line, false, &self->as_ansi_buf);
+        if (!text) return NULL;
+        RAII_PyObject(item, Py_BuildValue("(KNp)", self->total_history_line_count + y + 1, text, y > 0 && linebuf_is_line_continued(self->main_linebuf, y)));
+        if (!item || PyList_Append(ans, item) != 0) return NULL;
+    }
+    return Py_NewRef(ans);
+}
+
+static PyObject *
 text_for_marked_url(Screen *self, PyObject *args) {
     int ansi = 0, strip_trailing_whitespace = 0;
     if (!PyArg_ParseTuple(args, "|pp", &ansi, &strip_trailing_whitespace)) return NULL;
@@ -7026,6 +7048,7 @@ static PyMethodDef methods[] = {
     MND(reverse_index, METH_NOARGS) MND(mark_as_dirty, METH_NOARGS) MND(reload_all_gpu_data, METH_NOARGS) MND(resize, METH_VARARGS)
         MND(ignore_bells_for, METH_VARARGS) MND(set_margins, METH_VARARGS) MND(detect_url, METH_VARARGS) MND(rescale_images, METH_NOARGS)
             MND(current_key_encoding_flags, METH_NOARGS) MND(text_for_selection, METH_VARARGS) MND(selection_bounds, METH_NOARGS)
+                MND(physical_lines, METH_NOARGS)
                 MND(text_for_marked_url, METH_VARARGS)
                 MND(is_rectangle_select, METH_NOARGS) MND(scroll, METH_VARARGS) MND(scroll_to_absolute, METH_O) MND(fractional_scroll, METH_O)
                     MND(scroll_to_prompt, METH_VARARGS) MND(set_last_visited_prompt, METH_VARARGS) MND(send_escape_code_to_child, METH_VARARGS)
