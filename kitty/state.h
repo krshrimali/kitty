@@ -307,7 +307,8 @@ typedef struct Window {
     ClickQueue click_queues[8];
     monotonic_t last_drag_scroll_at;
     uint32_t last_special_key_pressed;
-    WindowBarData title_bar_data, url_target_bar_data;
+    WindowBarData title_bar_data, url_target_bar_data, sequence_hint_bar_data;
+    PyObject *sequence_hint;
     id_type redirect_keys_to_overlay;
     struct {
         bool enabled;

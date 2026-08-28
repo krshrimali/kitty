@@ -13,6 +13,7 @@ from .fast_data_types import (
     GLFW_MOD_META,
     GLFW_MOD_SHIFT,
     GLFW_MOD_SUPER,
+    GLFW_FKEY_ESCAPE,
     KeyEvent,
     SingleKey,
     get_boss,
@@ -25,12 +26,23 @@ from .fast_data_types import (
 from .options.types import Options
 from .options.utils import KeyboardMode, KeyDefinition, KeyFallbackType, KeyMap, KeyMapOptions
 from .typing_compat import ScreenType
+from .types import human_repr_of_single_key
 
 if TYPE_CHECKING:
     from .window import Window
 
 mod_mask = GLFW_MOD_ALT | GLFW_MOD_CONTROL | GLFW_MOD_SHIFT | GLFW_MOD_SUPER | GLFW_MOD_META | GLFW_MOD_HYPER
 _global_shortcut_options = KeyMapOptions(allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate))
+
+_annotation_sequence_labels = {
+    'annotate_selection': _('Annotate selection'),
+    'annotate_last_cmd_output': _('Last command output'),
+    'show_annotations': _('Show tab annotations'),
+    'show_annotations all': _('Show all annotations'),
+    'copy_annotations': _('Copy tab annotations'),
+    'clear_annotations': _('Delete tab annotations'),
+}
+_annotation_sequence_actions = frozenset(x.partition(' ')[0] for x in _annotation_sequence_labels)
 
 
 def keyboard_mode_name(screen: ScreenType) -> str:
@@ -94,6 +106,7 @@ class Mappings:
     def __init__(self, global_shortcuts: dict[str, SingleKey] | None = None, callback_on_mode_change: Callable[[], Any] = lambda: None) -> None:
         self.keyboard_mode_stack: list[KeyboardMode] = []
         self.mode_timeout_timer_id: int | None = None
+        self.sequence_hint_window: Optional['Window'] = None
         self.update_keymap(global_shortcuts)
         self.callback_on_mode_change = callback_on_mode_change
 
@@ -117,6 +130,7 @@ class Mappings:
         self._cancel_mode_timeout()
         self.keyboard_mode_stack = []
         self.set_ignore_os_keyboard_processing(False)
+        self.hide_sequence_hint()
         if had_mode:
             self.callback_on_mode_change()
 
@@ -129,7 +143,38 @@ class Mappings:
                 self.set_ignore_os_keyboard_processing(False)
             passthrough = False
             self.callback_on_mode_change()
+            self.hide_sequence_hint()
         return passthrough
+
+    def hide_sequence_hint(self) -> None:
+        if self.sequence_hint_window is not None:
+            self.sequence_hint_window.set_sequence_hint(None)
+            self.sequence_hint_window = None
+
+    def show_sequence_hint(self, mode: KeyboardMode) -> None:
+        window = self.get_active_window()
+        if window is None:
+            return
+        entries: list[tuple[str, str]] = []
+        actions: list[str] = []
+        for key, definitions in mode.keymap.items():
+            if not definitions:
+                continue
+            parts = definitions[0].definition.split(maxsplit=1)
+            if not parts:
+                continue
+            definition = definitions[0].definition
+            action = parts[0]
+            actions.append(action)
+            label = _annotation_sequence_labels.get(definition, action.replace('_', ' ').capitalize())
+            entries.append((human_repr_of_single_key(key, self.get_options().kitty_mod).upper(), label))
+        entries.sort()
+        if entries:
+            title = _('Annotations') if all(action in _annotation_sequence_actions for action in actions) else _('Shortcuts')
+            hint = f'{title}  ' + '   '.join(f'{key}  {label}' for key, label in entries) + '   ESC  ' + _('Cancel')
+            self.hide_sequence_hint()
+            self.sequence_hint_window = window
+            window.set_sequence_hint(hint)
 
     def pop_keyboard_mode_if_is(self, name: str) -> bool:
         if self.keyboard_mode_stack and self.keyboard_mode_stack[-1].name == name:
@@ -230,6 +275,9 @@ class Mappings:
             if is_modifier_key(ev.key):
                 return False
             if not is_root_mode:
+                if mode.name == '__sequence__' and ev.key == GLFW_FKEY_ESCAPE:
+                    self.pop_keyboard_mode()
+                    return True
                 if mode.sequence_keys is not None:
                     self.pop_keyboard_mode()
                     w = self.get_active_window()
@@ -257,6 +305,7 @@ class Mappings:
                         sm.timeout = self._get_effective_timeout(final_actions[0])
                         for fa in final_actions:
                             sm.keymap[fa.rest[0]].append(fa.shift_sequence_and_copy())
+                        self.show_sequence_hint(sm)
                         self._push_keyboard_mode(sm)
                         self.debug_print('\n\x1b[35mKeyPress\x1b[m matched sequence prefix, ', end='')
                     else:
@@ -274,6 +323,7 @@ class Mappings:
                         mode.keymap.clear()
                         for fa in final_actions:
                             mode.keymap[fa.rest[0]].append(fa.shift_sequence_and_copy())
+                        self.show_sequence_hint(mode)
                     return True
                 final_action = final_actions[0]
                 consumed = self.combine(final_action.definition)

@@ -539,10 +539,14 @@ class TestKeys(BaseTest):
         class Window:
             def __init__(self, id=1):
                 self.key_seqs = []
+                self.sequence_hint = None
                 self.id = id
 
             def send_key_sequence(self, *s):
                 self.key_seqs.extend(s)
+
+            def set_sequence_hint(self, text):
+                self.sequence_hint = text
 
         class TM(Mappings):
             def __init__(self, *lines, active_window=Window()):
@@ -603,9 +607,14 @@ class TestKeys(BaseTest):
         self.ae(tm.actions, ['new_window_with_cwd'])
 
         tm = TM('map ctrl+f>2 set_font_size 20')
-        self.ae(tm('ctrl+f', '2'), [True, True])
+        self.ae(tm('ctrl+f'), [True])
+        self.assertIn('2  Set font size', tm.active_window.sequence_hint)
+        self.ae(tm('2'), [True])
         self.ae(tm.actions, ['set_font_size 20'])
+        self.assertIsNone(tm.active_window.sequence_hint)
         af(tm.active_window.key_seqs)
+        self.ae(tm('ctrl+f', 'escape'), [True, True])
+        self.assertIsNone(tm.active_window.sequence_hint)
         # unmatched multi key mapping should send all keys to child
         self.ae(tm('ctrl+f', '1'), [True, False])
         af(tm.actions)

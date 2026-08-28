@@ -1256,6 +1256,8 @@ def set_tab_bar_render_data(os_window_id: int, screen: Screen, left: int, top: i
 def set_window_title_bar_render_data(os_window_id: int, tab_id: int, window_id: int, screen: Screen, left: int, top: int, right: int, bottom: int) -> None:
     pass
 
+def set_window_sequence_hint(window_id: int, text: str | None) -> None: ...
+
 def set_window_render_data(
     os_window_id: int,
     tab_id: int,

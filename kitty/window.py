@@ -89,6 +89,7 @@ from .fast_data_types import (
     set_window_logo,
     set_window_padding,
     set_window_render_data,
+    set_window_sequence_hint,
     set_window_title_bar_render_data,
     start_drag_with_data,
     update_ime_position_for_window,
@@ -741,6 +742,9 @@ class Window:
     child_died: bool = False
     child_exit_status: int = 0
     child_exit_code: int = 0
+
+    def set_sequence_hint(self, text: str | None) -> None:
+        set_window_sequence_hint(self.id, text)
 
     @classmethod
     @contextmanager

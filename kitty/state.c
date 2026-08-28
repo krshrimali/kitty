@@ -441,6 +441,10 @@ destroy_window(Window *w) {
     Py_CLEAR(w->url_target_bar_data.last_drawn_title_object_id);
     free(w->url_target_bar_data.buf);
     w->url_target_bar_data.buf = NULL;
+    Py_CLEAR(w->sequence_hint_bar_data.last_drawn_title_object_id);
+    free(w->sequence_hint_bar_data.buf);
+    w->sequence_hint_bar_data.buf = NULL;
+    Py_CLEAR(w->sequence_hint);
     release_gpu_resources_for_window(w);
     if (w->window_logo.id) {
         decref_window_logo(global_state.all_window_logos, w->window_logo.id);
@@ -1150,6 +1154,27 @@ PYWRAP1(set_window_title_bar_render_data) {
     init_window_render_data(&window->window_title_render_data, g, screen);
     screen->reload_all_gpu_data = true;
     END_WITH_WINDOW
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+set_window_sequence_hint(PyObject *self UNUSED, PyObject *args) {
+    id_type window_id;
+    PyObject *hint;
+    if (!PyArg_ParseTuple(args, "KO", &window_id, &hint)) return NULL;
+    Window *w = window_for_window_id(window_id);
+    if (w) {
+        if (hint == Py_None) hint = NULL;
+        else if (!PyUnicode_Check(hint)) {
+            PyErr_SetString(PyExc_TypeError, "sequence hint must be a string or None");
+            return NULL;
+        }
+        Py_XSETREF(w->sequence_hint, Py_XNewRef(hint));
+        Py_CLEAR(w->sequence_hint_bar_data.last_drawn_title_object_id);
+        w->sequence_hint_bar_data.needs_render = true;
+        OSWindow *os_window = os_window_for_kitty_window(window_id);
+        if (os_window) mark_os_window_dirty(os_window->id);
+    }
     Py_RETURN_NONE;
 }
 
@@ -2026,6 +2051,7 @@ static PyMethodDef module_methods[] = {
     M(os_window_focus_counters, METH_NOARGS),
     M(get_mouse_data_for_window, METH_VARARGS),
     M(request_callback_with_thumbnail, METH_VARARGS),
+    M(set_window_sequence_hint, METH_VARARGS),
     M(set_tab_being_dragged, METH_VARARGS),
     M(get_tab_being_dragged, METH_NOARGS),
     M(set_window_being_dragged, METH_VARARGS),

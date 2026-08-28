@@ -2680,6 +2680,10 @@ destroy_fake_window_contents(Window *w) {
     Py_CLEAR(w->url_target_bar_data.last_drawn_title_object_id);
     free(w->url_target_bar_data.buf);
     w->url_target_bar_data.buf = NULL;
+    Py_CLEAR(w->sequence_hint_bar_data.last_drawn_title_object_id);
+    free(w->sequence_hint_bar_data.buf);
+    w->sequence_hint_bar_data.buf = NULL;
+    Py_CLEAR(w->sequence_hint);
     // render_data.vao_idx is -1 so release_gpu_resources_for_window is safe, but we skip it
     // since we never allocated those resources.
 }

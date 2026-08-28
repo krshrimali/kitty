@@ -1313,6 +1313,13 @@ draw_hyperlink_target(const UIRenderData *ui) {
     Py_DECREF(ref);
 }
 
+static void
+draw_sequence_hint(const UIRenderData *ui) {
+    Window *window = ui->window;
+    if (!window || !window->sequence_hint || !PyUnicode_Check(window->sequence_hint)) return;
+    render_a_bar(ui, &window->sequence_hint_bar_data, window->sequence_hint, true);
+}
+
 static bool
 has_window_number(Window *w, Screen *screen) {
     return w != NULL && screen->display_window_char != 0;
@@ -1698,7 +1705,7 @@ draw_window_logo(const UIRenderData *ui) {
 bool
 screen_needs_rendering_in_layers(OSWindow *os_window, Window *w, Screen *screen) {
     const bool has_ui = w && ((screen->start_visual_bell_at | screen->start_drag_overlay_at) || has_scrollbar(w, screen) || has_progress_bar(screen) ||
-                              has_hyperlink_target(os_window, w, screen) || has_window_number(w, screen) || w->window_logo.id);
+                              has_hyperlink_target(os_window, w, screen) || w->sequence_hint || has_window_number(w, screen) || w->window_logo.id);
     GraphicsManager *grman = screen->paused_rendering.expires_at && screen->paused_rendering.grman ? screen->paused_rendering.grman : screen->grman;
     return has_ui || grman_has_images(grman);
 }
@@ -1985,6 +1992,7 @@ draw_cells_with_layers(const UIRenderData *ui, ssize_t vao_idx) {
     draw_progress_bar(ui);
     draw_scrollbar(ui);
     draw_hyperlink_target(ui);
+    draw_sequence_hint(ui);
     draw_window_number(ui);
 }
 
