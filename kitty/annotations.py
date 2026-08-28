@@ -11,6 +11,7 @@ are not persisted to disk.
 import fcntl
 import json
 import os
+import shutil
 import tempfile
 import time
 from collections.abc import Iterable, Iterator, Sequence
@@ -188,6 +189,30 @@ _store_loaded = False
 _known_persisted_ids: set[str] = set()
 
 
+def read_persisted_annotations(path: str) -> list[dict[str, Any]]:
+    from .utils import log_error
+
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        if not isinstance(data, list):
+            raise TypeError('the top-level JSON value is not a list')
+        return [item for item in data if isinstance(item, dict)]
+    except FileNotFoundError:
+        return []
+    except OSError as e:
+        log_error(f'Could not read annotation storage {path}: {e}')
+        return []
+    except (ValueError, TypeError) as e:
+        backup = f'{path}.corrupt-{time.strftime("%Y%m%d-%H%M%S")}'
+        try:
+            shutil.copy2(path, backup)
+            log_error(f'Invalid annotation storage {path}: {e}. Preserved a copy at {backup}')
+        except OSError as backup_error:
+            log_error(f'Invalid annotation storage {path}: {e}. Could not preserve a copy: {backup_error}')
+        return []
+
+
 def annotation_store() -> AnnotationStore:
     'The global, in-memory store of annotations for this kitty instance'
     global _store, _store_loaded, _known_persisted_ids
@@ -197,15 +222,11 @@ def annotation_store() -> AnnotationStore:
         _store_loaded = True
         path = annotation_storage_path()
         if path:
-            try:
-                with open(path) as f:
-                    for item in json.load(f):
-                        annotation = Annotation.from_dict(item)
-                        annotation.location = annotation.location._replace(tab_id=0, window_id=0)
-                        _store.add(annotation)
-                        _known_persisted_ids.add(annotation.id)
-            except (OSError, ValueError, TypeError):
-                pass
+            for item in read_persisted_annotations(path):
+                annotation = Annotation.from_dict(item)
+                annotation.location = annotation.location._replace(tab_id=0, window_id=0)
+                _store.add(annotation)
+                _known_persisted_ids.add(annotation.id)
     return _store
 
 
@@ -224,11 +245,7 @@ def save_annotations() -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path + '.lock', 'a+') as lock_file:
         fcntl.flock(lock_file, fcntl.LOCK_EX)
-        try:
-            with open(path) as f:
-                disk_items = json.load(f)
-        except (OSError, ValueError, TypeError):
-            disk_items = []
+        disk_items = read_persisted_annotations(path)
         disk_by_id = {item.get('id'): item for item in disk_items if isinstance(item, dict) and item.get('id')}
         current_by_id = {a.id: a for a in _store}
         merged: dict[str, dict[str, Any]] = {}

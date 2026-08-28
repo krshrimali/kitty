@@ -212,6 +212,14 @@ class TestAnnotations(BaseTest):
             annotations_module._store, annotations_module._store_loaded = old_store, old_loaded
             annotations_module._known_persisted_ids = old_known
 
+    def test_invalid_annotation_persistence_is_preserved(self):
+        with tempfile.TemporaryDirectory() as tdir:
+            path = os.path.join(tdir, 'annotations.json')
+            with open(path, 'w') as f:
+                f.write('{not valid json')
+            self.ae(annotations_module.read_persisted_annotations(path), [])
+            self.ae(len([x for x in os.listdir(tdir) if '.corrupt-' in x]), 1)
+
     def test_annotation_highlight_coexists_with_user_marker(self):
         s = self.create_screen()
         s.draw('alpha beta')
