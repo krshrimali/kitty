@@ -228,9 +228,28 @@ def save_annotations() -> None:
             pass
 
 
+def marker_for_ranges(ranges: dict[int, list[tuple[int, int, str]]], highlight_mark: int) -> Any:
+    from .fast_data_types import set_uint_at_address, truncate_point_for_length
+
+    def marker(text: str, left_address: int, right_address: int, color_address: int, line_number: int) -> Any:
+        set_uint_at_address(color_address, highlight_mark)
+        for start_x, end_x, fallback_text in ranges.get(line_number, ()):
+            left = truncate_point_for_length(text, start_x) if start_x else 0
+            right = len(text) - 1 if end_x < 0 else truncate_point_for_length(text, end_x) - 1
+            if right < left and fallback_text:
+                pos = text.find(fallback_text)
+                if pos > -1:
+                    left, right = pos, pos + len(fallback_text) - 1
+            if right >= left:
+                set_uint_at_address(left_address, left)
+                set_uint_at_address(right_address, right)
+                yield
+
+    return marker
+
+
 def refresh_annotation_markers(boss: Any) -> None:
     'Refresh the independent marker used to keep annotated source text visible.'
-    from .fast_data_types import set_uint_at_address, truncate_point_for_length
     from .fast_data_types import get_options
 
     highlight_mark = max(1, min(3, get_options().annotation_highlight))
@@ -258,21 +277,7 @@ def refresh_annotation_markers(boss: Any) -> None:
                         ranges.setdefault(line_number, []).append((0, -1, ''))
                     ranges.setdefault(last, []).append((0, loc.end_x, ''))
 
-            def marker(text: str, left_address: int, right_address: int, color_address: int, line_number: int) -> Any:
-                set_uint_at_address(color_address, highlight_mark)
-                for start_x, end_x, fallback_text in ranges.get(line_number, ()):
-                    left = truncate_point_for_length(text, start_x) if start_x else 0
-                    right = len(text) - 1 if end_x < 0 else truncate_point_for_length(text, end_x) - 1
-                    if right < left and fallback_text:
-                        pos = text.find(fallback_text)
-                        if pos > -1:
-                            left, right = pos, pos + len(fallback_text) - 1
-                    if right >= left:
-                        set_uint_at_address(left_address, left)
-                        set_uint_at_address(right_address, right)
-                        yield
-
-            window.screen.set_annotation_marker(marker)
+            window.screen.set_annotation_marker(marker_for_ranges(ranges, highlight_mark))
         else:
             window.screen.set_annotation_marker()
     for tab_manager in boss.os_window_map.values():

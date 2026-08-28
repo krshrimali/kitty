@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from kittens.annotations.main import Frame, ListHandler, key_event_for_char, single_line_view, truncate_to_width, visible_window, wrap_text
 from kittens.tui.loop import EventType, MouseButton, MouseEvent
-from kitty.annotations import Annotation, AnnotationStore, Location, format_annotations
+from kitty.annotations import Annotation, AnnotationStore, Location, format_annotations, marker_for_ranges
 from kitty import annotations as annotations_module
 from kitty.fast_data_types import GLFW_MOUSE_BUTTON_LEFT, create_mock_window, mock_mouse_selection, send_mock_mouse_event_to_window
 from kitty.key_encoding import KeyEvent, parse_shortcut
@@ -186,6 +186,15 @@ class TestAnnotations(BaseTest):
         self.ae(sum(mark == 3 for _x, _y, mark in marks), 4)
         s.set_annotation_marker()
         self.ae(sum(mark == 1 for _x, _y, mark in s.marked_cells()), 5)
+
+    def test_annotation_markers_keep_independent_window_ranges(self):
+        one, two = self.create_screen(), self.create_screen()
+        one.draw('alpha')
+        two.draw('bravo')
+        one.set_annotation_marker(marker_for_ranges({1: [(0, 2, '')]}, 3))
+        two.set_annotation_marker(marker_for_ranges({1: [(2, 5, '')]}, 3))
+        self.ae([(x, mark) for x, y, mark in one.marked_cells()], [(0, 3), (1, 3)])
+        self.ae([(x, mark) for x, y, mark in two.marked_cells()], [(2, 3), (3, 3), (4, 3)])
 
     def test_annotation_round_trip(self):
         a = Annotation('some text', 'a note', Location(tab_id=3, window_id=4, tab_title='t', window_title='w', start_line=7, end_line=9))
