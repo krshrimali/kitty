@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from kittens.annotations.main import Frame, ListHandler, key_event_for_char, single_line_view, truncate_to_width, visible_window, wrap_text
 from kittens.tui.loop import EventType, MouseButton, MouseEvent
-from kitty.annotations import Annotation, AnnotationStore, Location, format_annotations, marker_for_ranges
+from kitty.annotations import Annotation, AnnotationStore, Location, format_annotations, highlight_ranges_for_location, marker_for_ranges
 from kitty import annotations as annotations_module
 from kitty.fast_data_types import GLFW_MOUSE_BUTTON_LEFT, create_mock_window, mock_mouse_selection, send_mock_mouse_event_to_window
 from kitty.key_encoding import KeyEvent, parse_shortcut
@@ -30,6 +30,13 @@ class TestAnnotations(BaseTest):
         self.ae(normalized_selection_bound(bound), ((1, 2), (4, 8)))
         same_line = {'start_x': 8, 'start_y': 1, 'end_x': 2, 'end_y': 1}
         self.ae(normalized_selection_bound(same_line), ((1, 2), (1, 8)))
+
+    def test_multiple_and_rectangular_annotation_ranges(self):
+        loc = Location(ranges=((10, 12, 2, 5, True), (20, 20, 7, 9, False)))
+        self.ae(
+            highlight_ranges_for_location(loc),
+            {10: [(2, 5, '')], 11: [(2, 5, '')], 12: [(2, 5, '')], 20: [(7, 9, '')]},
+        )
 
     def test_annotation_tui_layout_helpers(self):
         self.ae(Frame(40).margin, 0)

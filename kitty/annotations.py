@@ -31,6 +31,7 @@ class Location(NamedTuple):
     end_x: int = 0
     start_line_id: int = 0
     end_line_id: int = 0
+    ranges: tuple[tuple[int, int, int, int, bool], ...] = ()  # stable start/end line ids, start/end columns, rectangular
     cwd: str = ''
     label: str = ''  # description of the text when it did not come from a selection
 
@@ -86,6 +87,8 @@ class Annotation:
     @classmethod
     def from_dict(cls, x: dict[str, Any]) -> 'Annotation':
         loc = x.get('location') or {}
+        if loc.get('ranges'):
+            loc = dict(loc, ranges=tuple(tuple(item) for item in loc['ranges']))
         return cls(
             text=x.get('text', ''),
             note=x.get('note', ''),
@@ -248,6 +251,30 @@ def marker_for_ranges(ranges: dict[int, list[tuple[int, int, str]]], highlight_m
     return marker
 
 
+def highlight_ranges_for_location(loc: Location, fallback_text: str = '') -> dict[int, list[tuple[int, int, str]]]:
+    ans: dict[int, list[tuple[int, int, str]]] = {}
+    first = loc.start_line_id or loc.start_line
+    last = loc.end_line_id or first + max(0, loc.end_line - loc.start_line)
+    selections = loc.ranges or ((first, last, loc.start_x, loc.end_x, False),)
+    for first, last, start_x, end_x, rectangle in selections:
+        if not first:
+            continue
+        if last < first:
+            first, last, start_x, end_x = last, first, end_x, start_x
+        if rectangle:
+            left, right = sorted((start_x, end_x))
+            for line_number in range(first, last + 1):
+                ans.setdefault(line_number, []).append((left, right, fallback_text if first == last else ''))
+        elif first == last:
+            ans.setdefault(first, []).append((start_x, end_x, fallback_text))
+        else:
+            ans.setdefault(first, []).append((start_x, -1, ''))
+            for line_number in range(first + 1, last):
+                ans.setdefault(line_number, []).append((0, -1, ''))
+            ans.setdefault(last, []).append((0, end_x, ''))
+    return ans
+
+
 def refresh_annotation_markers(boss: Any) -> None:
     'Refresh the independent marker used to keep annotated source text visible.'
     from .fast_data_types import get_options
@@ -265,17 +292,8 @@ def refresh_annotation_markers(boss: Any) -> None:
             ranges: dict[int, list[tuple[int, int, str]]] = {}
             for annotation in annotations:
                 loc = annotation.location
-                if not loc.start_line:
-                    continue
-                first = loc.start_line_id or loc.start_line
-                last = loc.end_line_id or first + max(0, loc.end_line - loc.start_line)
-                if first == last:
-                    ranges.setdefault(first, []).append((loc.start_x, loc.end_x, annotation.text))
-                else:
-                    ranges.setdefault(first, []).append((loc.start_x, -1, ''))
-                    for line_number in range(first + 1, last):
-                        ranges.setdefault(line_number, []).append((0, -1, ''))
-                    ranges.setdefault(last, []).append((0, loc.end_x, ''))
+                for line_number, line_ranges in highlight_ranges_for_location(loc, annotation.text).items():
+                    ranges.setdefault(line_number, []).extend(line_ranges)
 
             window.screen.set_annotation_marker(marker_for_ranges(ranges, highlight_mark))
         else:

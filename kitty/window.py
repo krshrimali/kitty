@@ -2670,8 +2670,18 @@ class Window:
             start_line, end_line = offset + start_y, offset + end_y
             start_line_id = self.screen.total_history_line_count + start_y + 1
             end_line_id = self.screen.total_history_line_count + end_y + 1
+            ranges = tuple(
+                (
+                    self.screen.total_history_line_count + start[0] + 1,
+                    self.screen.total_history_line_count + end[0] + 1,
+                    start[1],
+                    end[1],
+                    bool(bound.get('rectangle_select')),
+                )
+                for bound, (start, end) in zip(bounds, normalized)
+            )
             return text, self.annotation_location(start_line, end_line)._replace(
-                start_x=start_x, end_x=end_x, start_line_id=start_line_id, end_line_id=end_line_id
+                start_x=start_x, end_x=end_x, start_line_id=start_line_id, end_line_id=end_line_id, ranges=ranges
             )
         return text, self.annotation_location(start_line, end_line)
 

@@ -801,6 +801,8 @@ def handle_result(args: list[str], data: dict[str, Any] | None, target_window_id
     store = annotation_store()
     if 'note' in data:  # add mode
         loc = data.get('location') or {}
+        if loc.get('ranges'):
+            loc = dict(loc, ranges=tuple(tuple(item) for item in loc['ranges']))
         existing_id = data.get('id') or ''
         if existing_id:
             a = store.get(existing_id)
