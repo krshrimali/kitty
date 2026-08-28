@@ -13,7 +13,7 @@ from kitty import annotations as annotations_module
 from kitty.fast_data_types import GLFW_MOUSE_BUTTON_LEFT, create_mock_window, mock_mouse_selection, send_mock_mouse_event_to_window
 from kitty.key_encoding import KeyEvent, parse_shortcut
 from kitty.marks import marker_from_text
-from kitty.window import cell_is_in_selection
+from kitty.window import cell_is_in_selection, normalized_selection_bound
 
 from .base import BaseTest
 
@@ -25,6 +25,12 @@ def send_mouse_event(window, button=-1, modifiers=0, is_release=False, x=0.0, y=
 
 
 class TestAnnotations(BaseTest):
+    def test_reverse_selection_bounds_are_normalized(self):
+        bound = {'start_x': 8, 'start_y': 4, 'end_x': 2, 'end_y': 1}
+        self.ae(normalized_selection_bound(bound), ((1, 2), (4, 8)))
+        same_line = {'start_x': 8, 'start_y': 1, 'end_x': 2, 'end_y': 1}
+        self.ae(normalized_selection_bound(same_line), ((1, 2), (1, 8)))
+
     def test_annotation_tui_layout_helpers(self):
         self.ae(Frame(40).margin, 0)
         self.ae(Frame(200).width, 120)

@@ -159,6 +159,13 @@ def cell_is_in_selection(mask: bytes, columns: int, lines: int, cell_x: int, cel
     return 0 <= idx < len(mask) and bool(mask[idx] & 1)
 
 
+def normalized_selection_bound(bound: dict[str, Any]) -> tuple[tuple[int, int], tuple[int, int]]:
+    'Return selection endpoints ordered from the top-left to the bottom-right.'
+    start = int(bound['start_y']), int(bound['start_x'])
+    end = int(bound['end_y']), int(bound['end_x'])
+    return (start, end) if start <= end else (end, start)
+
+
 class CwdRequestType(Enum):
     current = auto()
     last_reported = auto()
@@ -2655,8 +2662,9 @@ class Window:
             # lines in the scrollback, convert to 1-based line numbers counted
             # from the start of the scrollback
             offset = self.screen.historybuf.count + 1
-            starts = sorted(((b['start_y'], b['start_x']) for b in bounds))
-            ends = sorted(((b['end_y'], b['end_x']) for b in bounds))
+            normalized = [normalized_selection_bound(b) for b in bounds]
+            starts = sorted(x[0] for x in normalized)
+            ends = sorted(x[1] for x in normalized)
             start_y, start_x = starts[0]
             end_y, end_x = ends[-1]
             start_line, end_line = offset + start_y, offset + end_y
