@@ -1064,6 +1064,7 @@ class Screen:
     color_preference_notification: bool
     cursor_visible: bool
     scrolled_by: int
+    total_history_line_count: int
     cursor: Cursor
     disable_ligatures: int
     cursor_key_mode: bool

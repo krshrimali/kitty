@@ -26,6 +26,8 @@ class Location(NamedTuple):
     end_line: int = 0
     start_x: int = 0
     end_x: int = 0
+    start_line_id: int = 0
+    end_line_id: int = 0
     cwd: str = ''
     label: str = ''  # description of the text when it did not come from a selection
 
@@ -187,7 +189,7 @@ def annotation_store() -> AnnotationStore:
 
 def refresh_annotation_markers(boss: Any) -> None:
     'Refresh the independent marker used to keep annotated source text visible.'
-    from .fast_data_types import set_uint_at_address
+    from .fast_data_types import set_uint_at_address, truncate_point_for_length
 
     by_window: dict[int, list[Annotation]] = {}
     for annotation in annotation_store():
@@ -196,31 +198,33 @@ def refresh_annotation_markers(boss: Any) -> None:
     for window_id, window in boss.window_id_map.items():
         annotations = by_window.get(window_id)
         if annotations:
-            ranges: dict[int, list[tuple[str, int]]] = {}
+            ranges: dict[int, list[tuple[int, int, str]]] = {}
             for annotation in annotations:
                 loc = annotation.location
                 if not loc.start_line:
                     continue
-                pieces = annotation.text.splitlines() or ['']
-                for offset, piece in enumerate(pieces):
-                    line_number = loc.start_line + offset
-                    expected_x = loc.start_x if offset == 0 else 0
-                    ranges.setdefault(line_number, []).append((piece, expected_x))
+                first = loc.start_line_id or loc.start_line
+                last = loc.end_line_id or first + max(0, loc.end_line - loc.start_line)
+                if first == last:
+                    ranges.setdefault(first, []).append((loc.start_x, loc.end_x, annotation.text))
+                else:
+                    ranges.setdefault(first, []).append((loc.start_x, -1, ''))
+                    for line_number in range(first + 1, last):
+                        ranges.setdefault(line_number, []).append((0, -1, ''))
+                    ranges.setdefault(last, []).append((0, loc.end_x, ''))
 
             def marker(text: str, left_address: int, right_address: int, color_address: int, line_number: int) -> Any:
                 set_uint_at_address(color_address, 3)
-                for piece, expected_x in ranges.get(line_number, ()):
-                    if not piece:
-                        continue
-                    starts: list[int] = []
-                    pos = text.find(piece)
-                    while pos > -1:
-                        starts.append(pos)
-                        pos = text.find(piece, pos + 1)
-                    if starts:
-                        left = min(starts, key=lambda x: abs(x - expected_x))
+                for start_x, end_x, fallback_text in ranges.get(line_number, ()):
+                    left = truncate_point_for_length(text, start_x) if start_x else 0
+                    right = len(text) - 1 if end_x < 0 else truncate_point_for_length(text, end_x) - 1
+                    if right < left and fallback_text:
+                        pos = text.find(fallback_text)
+                        if pos > -1:
+                            left, right = pos, pos + len(fallback_text) - 1
+                    if right >= left:
                         set_uint_at_address(left_address, left)
-                        set_uint_at_address(right_address, left + len(piece) - 1)
+                        set_uint_at_address(right_address, right)
                         yield
 
             window.screen.set_annotation_marker(marker)

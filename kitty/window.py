@@ -2660,7 +2660,11 @@ class Window:
             start_y, start_x = starts[0]
             end_y, end_x = ends[-1]
             start_line, end_line = offset + start_y, offset + end_y
-            return text, self.annotation_location(start_line, end_line)._replace(start_x=start_x, end_x=end_x)
+            start_line_id = self.screen.total_history_line_count + start_y + 1
+            end_line_id = self.screen.total_history_line_count + end_y + 1
+            return text, self.annotation_location(start_line, end_line)._replace(
+                start_x=start_x, end_x=end_x, start_line_id=start_line_id, end_line_id=end_line_id
+            )
         return text, self.annotation_location(start_line, end_line)
 
     @ac(

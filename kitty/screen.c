@@ -2487,7 +2487,7 @@ screen_cursor_to_column(Screen *self, unsigned int column) {
         /* Only add to history when no top margin has been set */                                                         \
         linebuf_init_line(self->linebuf, bottom);                                                                         \
         historybuf_add_line(self->historybuf, self->linebuf->line, &self->as_ansi_buf);                                   \
-        self->history_line_added_count++;                                                                                 \
+        self->history_line_added_count++; self->total_history_line_count++;                                               \
         if (self->last_visited_prompt.is_set) {                                                                           \
             if (self->last_visited_prompt.scrolled_by < self->historybuf->count) self->last_visited_prompt.scrolled_by++; \
             else self->last_visited_prompt.is_set = false;                                                                \
@@ -4080,7 +4080,7 @@ screen_update_cell_data(Screen *self, void *address, FONTS_DATA_HANDLE fonts_dat
                 if (linebuf->line->attrs.has_dirty_text) {
                     render_line(fonts_data, linebuf->line, y, &self->paused_rendering.cursor, self->disable_ligatures, self->lc);
                     screen_render_line_graphics(self, linebuf->line, y);
-                    if (linebuf->line->attrs.has_dirty_text && screen_has_any_marker(self)) apply_screen_markers(self, linebuf->line, y + 1);
+                    if (linebuf->line->attrs.has_dirty_text && screen_has_any_marker(self)) apply_screen_markers(self, linebuf->line, self->total_history_line_count + y + 1);
                     linebuf_mark_line_clean(linebuf, y);
                 }
                 update_line_data(linebuf->line, y, address);
@@ -4113,14 +4113,14 @@ screen_update_cell_data(Screen *self, void *address, FONTS_DATA_HANDLE fonts_dat
             screen_render_line_graphics(self, linep, virtual_y - (int)self->scrolled_by);
             if (force_history_render || linep->attrs.has_dirty_text) {
                 render_line(fonts_data, linep, lnum, self->cursor, self->disable_ligatures, self->lc);
-                if (screen_has_any_marker(self)) apply_screen_markers(self, linep, self->historybuf->count - lnum);
+                if (screen_has_any_marker(self)) apply_screen_markers(self, linep, self->total_history_line_count - lnum);
                 historybuf_mark_line_clean(self->historybuf, lnum);
             }
         } else {
             if (linep->attrs.has_dirty_text || (cursor_has_moved && (self->cursor->y == lnum || self->last_rendered.cursor.y == lnum))) {
                 render_line(fonts_data, linep, lnum, self->cursor, self->disable_ligatures, self->lc);
                 screen_render_line_graphics(self, linep, virtual_y - (int)self->scrolled_by);
-                if (linep->attrs.has_dirty_text && screen_has_any_marker(self)) apply_screen_markers(self, linep, self->historybuf->count + lnum + 1);
+                if (linep->attrs.has_dirty_text && screen_has_any_marker(self)) apply_screen_markers(self, linep, self->total_history_line_count + lnum + 1);
                 if (is_overlay_active && lnum == self->overlay_line.ynum) render_overlay_line(self, linep, fonts_data);
                 linebuf_mark_line_clean(self->linebuf, lnum);
             }
@@ -6535,7 +6535,7 @@ static void
 screen_mark_all(Screen *self) {
     for (index_type y = 0; y < self->main_linebuf->ynum; y++) {
         linebuf_init_line(self->main_linebuf, y);
-        apply_screen_markers(self, self->main_linebuf->line, self->historybuf->count + y + 1);
+        apply_screen_markers(self, self->main_linebuf->line, self->total_history_line_count + y + 1);
     }
     for (index_type y = 0; y < self->alt_linebuf->ynum; y++) {
         linebuf_init_line(self->alt_linebuf, y);
@@ -6543,7 +6543,7 @@ screen_mark_all(Screen *self) {
     }
     for (index_type y = 0; y < self->historybuf->count; y++) {
         historybuf_init_line(self->historybuf, y, self->historybuf->line);
-        apply_screen_markers(self, self->historybuf->line, self->historybuf->count - y);
+        apply_screen_markers(self, self->historybuf->line, self->total_history_line_count - y);
     }
     self->is_dirty = true;
 }
@@ -7070,6 +7070,7 @@ static PyMemberDef members[] = {
     {"margin_top", T_UINT, offsetof(Screen, margin_top), READONLY, "margin_top"},
     {"margin_bottom", T_UINT, offsetof(Screen, margin_bottom), READONLY, "margin_bottom"},
     {"history_line_added_count", T_UINT, offsetof(Screen, history_line_added_count), 0, "history_line_added_count"},
+    {"total_history_line_count", T_ULONGLONG, offsetof(Screen, total_history_line_count), 0, "total_history_line_count"},
     {NULL}};
 
 PyTypeObject Screen_Type = {
