@@ -195,7 +195,9 @@ def annotation_store() -> AnnotationStore:
             try:
                 with open(path) as f:
                     for item in json.load(f):
-                        _store.add(Annotation.from_dict(item))
+                        annotation = Annotation.from_dict(item)
+                        annotation.location = annotation.location._replace(tab_id=0, window_id=0)
+                        _store.add(annotation)
             except (OSError, ValueError, TypeError):
                 pass
     return _store

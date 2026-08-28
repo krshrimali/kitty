@@ -471,7 +471,7 @@ class Tab:  # {{{
     def data_for_tab_bar(self, is_active: bool) -> TabBarData:
         t = self
         title = t.name or t.title or appname
-        from .annotations import annotation_store, save_annotations
+        from .annotations import annotation_storage_path, annotation_store, save_annotations
 
         annotation_count = len(annotation_store().for_tab(t.id))
         if annotation_count:
@@ -1281,7 +1281,8 @@ class Tab:  # {{{
         from .annotations import annotation_store
 
         evict_cached_layouts(self.id)
-        annotation_store().remove_tab(self.id)
+        if not annotation_storage_path():
+            annotation_store().remove_tab(self.id)
         save_annotations()
         for w in self.windows:
             w.destroy()
