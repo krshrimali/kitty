@@ -354,17 +354,26 @@ class ListHandler(Handler):
         self.last_deleted: tuple[dict[str, Any], int] | None = None
         self.jump_id = ''
         self.entry_rows: dict[int, int] = {}
+        self.action_cells: dict[tuple[int, int], str] = {}
+        self.saving = False
+        self.save_path = ''
+        self.sort_mode = 'created'
 
     # helpers {{{
     @property
     def displayed(self) -> list[dict[str, Any]]:
-        if not self.query:
-            return self.annotations
-        q = self.query.casefold()
-        return [
+        shown = self.annotations
+        if self.query:
+            q = self.query.casefold()
+            shown = [
             a for a in self.annotations
             if q in '\n'.join((a.get('text', ''), self.note_for(a), location_text(a.get('location') or {}))).casefold()
-        ]
+            ]
+        if self.sort_mode == 'window':
+            return sorted(shown, key=lambda a: (a.get('location', {}).get('window_title', '').casefold(), a.get('created_at', 0)))
+        if self.sort_mode == 'source':
+            return sorted(shown, key=lambda a: (a.get('location', {}).get('start_line', 0), a.get('created_at', 0)))
+        return shown
 
     @property
     def current(self) -> dict[str, Any] | None:
@@ -463,7 +472,9 @@ class ListHandler(Handler):
                 self.entry_rows[len(lines)] = start + n // 2
             lc, lw = list_rows[n] if n < len(list_rows) else ('', 0)
             rc, rw = detail[n] if n < len(detail) else ('', 0)
-            content = lc + ' ' * max(0, left_width - lw) + dim(' │ ') + rc
+            thumb = round(self.idx / max(1, len(self.displayed) - 1) * max(0, body_rows - 1))
+            bar = accent('█') if n == thumb else dim('│')
+            content = lc + ' ' * max(0, left_width - lw - 1) + bar + dim(' │ ') + rc
             lines.append(f.row(content, left_width + 3 + rw))
 
     def finalize(self) -> None:
@@ -479,7 +490,8 @@ class ListHandler(Handler):
         tag = f'{len(self.ticked)} ticked · {position}' if self.ticked else position
         lines = ['', f.top(self.panel_title, tag)]
         self.entry_rows = {}
-        context = f'{self.scope.capitalize()} · {self.fmt.capitalize()}'
+        self.action_cells = {}
+        context = f'{self.scope.capitalize()} · {self.fmt.capitalize()} · Sort: {self.sort_mode}'
         if self.query:
             context += f' · Filter: {self.query}'
         lines.append(f.text(dim(truncate_to_width(context, f.width))))
@@ -500,7 +512,10 @@ class ListHandler(Handler):
             head, width_used = self.list_entry(i, a, f.inner)
             self.entry_rows[len(lines)] = i
             self.entry_rows[len(lines) + 1] = i
-            lines.append(f.row(head, width_used))
+            thumb = round((self.idx - start) / max(1, len(shown) - 1) * max(0, len(shown) * 2 - 1))
+            row_number = (i - start) * 2
+            bar = accent('█') if row_number <= thumb <= row_number + 1 else dim('│')
+            lines.append(f.row(head + ' ' * max(0, f.inner - width_used - 1) + bar, f.inner))
             loc = location_text(a.get('location') or {})
             if not a.get('source_available'):
                 loc = f'{loc} · source closed' if loc else 'source closed'
@@ -534,7 +549,14 @@ class ListHandler(Handler):
             )
             lines = lines[: max(0, sz.rows - len(help_lines) - 2)]
             lines.extend(('', f.rule('Keyboard help'), *(f.text(x) for x in help_lines)))
-        footer = self.message or ('search> ' + self.query if self.searching else '/ search · ? help · space tick · e edit · d delete · y copy · q quit')
+        footer = self.message or ('save as> ' + self.save_path if self.saving else ('search> ' + self.query if self.searching else 'Edit Delete Copy Save Format Sort Jump Undo Search Help Quit'))
+        if not self.message and not self.searching and not self.saving:
+            action_row = len(lines)
+            action_x = f.margin
+            for label, key in (('Edit', 'e'), ('Delete', 'd'), ('Copy', 'y'), ('Save', 's'), ('Format', 'f'), ('Sort', 'o'), ('Jump', 'enter'), ('Undo', 'u'), ('Search', '/'), ('Help', '?'), ('Quit', 'q')):
+                for x in range(action_x, action_x + len(label)):
+                    self.action_cells[action_row, x] = key
+                action_x += len(label) + 2
         lines.append(f.text(styled(truncate_to_width(footer, f.width), fg='yellow') if self.message else dim(truncate_to_width(footer, f.width))))
         self.write('\r\n'.join(lines[: sz.rows]))
 
@@ -553,6 +575,9 @@ class ListHandler(Handler):
 
     def on_click(self, mouse_event: MouseEvent) -> None:
         if mouse_event.buttons != MouseButton.LEFT:
+            return
+        if key := self.action_cells.get((mouse_event.cell_y, mouse_event.cell_x)):
+            self.on_key(KeyEvent(key='ENTER') if key == 'enter' else key_event_for_char(key))
             return
         clicked = self.entry_rows.get(mouse_event.cell_y)
         if clicked is None or clicked >= len(self.displayed):
@@ -599,6 +624,27 @@ class ListHandler(Handler):
             self.detail_offset = 0
             self.draw_screen()
             return
+        if self.saving:
+            if key_event.matches('esc'):
+                self.saving = False
+                self.save_path = ''
+            elif key_event.matches('enter'):
+                path = os.path.abspath(os.path.expanduser(os.path.expandvars(self.save_path)))
+                try:
+                    with open(path, 'x') as f:
+                        f.write(self.formatted(self.effective_ids()))
+                    self.message = f'Saved annotations to {path}'
+                    self.saving = False
+                except FileExistsError:
+                    self.message = 'File already exists; choose another path'
+                except OSError as e:
+                    self.message = f'Could not save: {e}'
+            elif key_event.matches('backspace'):
+                self.save_path = self.save_path[:-1]
+            elif key_event.text and key_event.text.isprintable():
+                self.save_path += key_event.text
+            self.draw_screen()
+            return
         if key_event.matches('q') or key_event.matches('esc'):
             if self.query:
                 self.query = ''
@@ -611,6 +657,17 @@ class ListHandler(Handler):
             self.show_help = True
         elif key_event.matches('/'):
             self.searching = True
+        elif key_event.matches('f'):
+            self.fmt = 'plain' if self.fmt == 'markdown' else 'markdown'
+            self.message = f'Export format: {self.fmt}'
+        elif key_event.matches('s'):
+            self.saving = True
+            self.save_path = f'kitty-annotations.{"md" if self.fmt == "markdown" else "txt"}'
+        elif key_event.matches('o'):
+            modes = ('created', 'window', 'source')
+            self.sort_mode = modes[(modes.index(self.sort_mode) + 1) % len(modes)]
+            self.idx = 0
+            self.message = f'Sorted by {self.sort_mode}'
         elif key_event.matches('tab'):
             self.focus = 'detail' if self.focus == 'list' else 'list'
             self.message = f'{self.focus.capitalize()} focused'
